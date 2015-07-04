@@ -710,12 +710,14 @@ void wamp_session<IStream, OStream>::process_invocation(
 
     auto procedure_itr = m_procedures.find(registration_id);
     if (procedure_itr != m_procedures.end()) {
-        if (message[3].type != msgpack::type::MAP) {
-            throw protocol_error("INVOCATION.Details must be a map");
-        }
-
         wamp_invocation invocation = std::make_shared<wamp_invocation_impl>();
         invocation->set_request_id(request_id);
+
+        if (message[3].type != msgpack::type::MAP) {
+            throw protocol_error("INVOCATION.Details must be a map");
+        }else{
+            invocation->set_details(message[3]);
+        }
 
         if (message.size() > 4) {
             if (message[4].type != msgpack::type::ARRAY) {
