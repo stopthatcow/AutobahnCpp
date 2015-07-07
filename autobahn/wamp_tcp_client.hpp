@@ -28,7 +28,7 @@
 #include <tuple>
 namespace autobahn {
 /**
- * @brief a class that wraps intialization of a raw tcp socket and WAMP client session utilizing it
+ * @brief a class that wraps initialization of a raw tcp socket and WAMP client session utilizing it
  */
     class wamp_tcp_client {
         typedef autobahn::wamp_session<boost::asio::ip::tcp::socket, boost::asio::ip::tcp::socket> wamp_tcp_session_t;
@@ -68,16 +68,13 @@ namespace autobahn {
         }
 
         /**
-     * @brief launches the session asyncronously, returns a future containing an error code (0 means success)
+     * @brief launches the session asynchronously, returns a future containing an error code (0 means success)
      */
         boost::future<bool> launch() {
             m_pSocket->async_connect(m_rawsocket_endpoint, [&](boost::system::error_code ec) {
                 if (!ec) {
-                    std::cerr << "connected to server" << std::endl;
                     m_startFuture = m_pSession->start().then([&](boost::future<bool> started) {
-                        std::cerr << "session started" << std::endl;
                         m_joinFuture = m_pSession->join(m_realm).then([&](boost::future<uint64_t> connected) {
-                            std::cerr << "connected to realm" << connected.get() << std::endl;
                             m_connected.set_value(true);
                         });
                     });
@@ -100,10 +97,9 @@ namespace autobahn {
         }
 
     private:
-        boost::future<void> m_stopFuture;
-        boost::future<void> m_startFuture;
-        boost::future<void> m_joinFuture;
-        boost::promise<bool> m_connected;
+        boost::future<void> m_startFuture; ///<holds the future of the start() operation
+        boost::future<void> m_joinFuture; ///<holds the future of the join() operation
+        boost::promise<bool> m_connected; ///<holds the future state of the success of launch
         std::shared_ptr<wamp_tcp_session_t> m_pSession; //<need to be sure this is destructed before m_pSocket
         std::shared_ptr<boost::asio::ip::tcp::socket> m_pSocket;
         std::string m_realm;
