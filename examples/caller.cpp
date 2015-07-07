@@ -62,7 +62,7 @@ int main(int argc, char** argv)
                             std::cerr << "joined realm: " << s.get() << std::endl;
 
                             std::tuple<uint64_t, uint64_t> arguments(23, 777);
-                            call_future = session->call("com.examples.calculator.add", arguments).then(
+                            call_future = session->call("com.examples.proxy", arguments).then(
                             [&](boost::future<autobahn::wamp_call_result> result) {
                                 uint64_t sum = result.get().argument<uint64_t>(0);
                                 std::cerr << "call result: " << sum << std::endl;
