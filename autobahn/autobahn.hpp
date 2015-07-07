@@ -22,6 +22,7 @@
 #include "wamp_event.hpp"
 #include "wamp_invocation.hpp"
 #include "wamp_session.hpp"
+#include "wamp_tcp_client.hpp"
 
 /*! \mainpage Reference Documentation
  *
