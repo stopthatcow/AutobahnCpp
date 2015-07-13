@@ -48,7 +48,7 @@ T wamp_invocation_impl::details(const std::string& key) const
             return kv.val.as<T>();
         }
     }
-    throw std::out_of_range(key + " detail argument doesn't exist");
+    throw std::out_of_range(key + " detail doesn't exist");
 }
 
 template <typename T>
@@ -66,7 +66,7 @@ T wamp_invocation_impl::detail(const char *key) const
             return kv.val.as<T>();
         }
     }
-    throw std::out_of_range(std::string(key) + " keyword argument doesn't exist");
+    throw std::out_of_range(std::string(key) + " detail doesn't exist");
 }
 
 template<typename Map>
