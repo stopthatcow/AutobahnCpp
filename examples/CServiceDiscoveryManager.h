@@ -14,6 +14,37 @@
 #include <stdint.h>
 #include <msgpack.hpp>
 
+
+template<typename ResolveHandler>
+void queryInterfaces(boost::asio::ip::udp::resolver &Resolver, ResolveHandler Handler){
+    boost::asio::ip::udp::resolver::query query(boost::asio::ip::udp::v4(), boost::asio::ip::host_name(), "");
+    Resolver.async_resolve(query, Handler);
+}
+
+/**
+ * This class monitors the list of network interfaces and emits a signal when a new one is detected
+ */
+class CInterfaceChangeNotifier{
+public:
+    void handleResolve(boost::asio::ip::udp::resolver::iterator endpoint_iterator){
+        std::set<boost::asio::ip::address> newKnownInterfaces;
+        for(; endpoint_iterator != boost::asio::ip::udp::resolver::iterator(); ++endpoint_iterator) {
+            interfaceSet_t::iterator itt = m_knownInterfaces.find(endpoint_iterator->endpoint().address());
+            if(itt == m_knownInterfaces.end()){
+                //found a new interface!
+                std::cout<<"New interface:"<< endpoint_iterator->endpoint().address().to_string() <<std::endl;
+                m_onNewInterface( endpoint_iterator->endpoint().address() );
+            }
+            newKnownInterfaces.insert(endpoint_iterator->endpoint().address());
+        }
+        m_knownInterfaces = newKnownInterfaces;
+    }
+    boost::signals2::signal<void (const boost::asio::ip::address &)> m_onNewInterface;
+private:
+    typedef std::set<boost::asio::ip::address> interfaceSet_t;
+    interfaceSet_t m_knownInterfaces;
+};
+
 class CServiceDiscoveryAnnouncer {
 public:
     CServiceDiscoveryAnnouncer(std::shared_ptr<boost::asio::io_service> IoService,
@@ -23,22 +54,20 @@ public:
                                boost::posix_time::millisec Period = boost::posix_time::millisec(2000U)) :
             m_resolver(*IoService),
             m_endpoint(boost::asio::ip::address::from_string(MulticastAddress), MulticastPort),
-            m_socket(*IoService, m_endpoint.protocol()),
-            m_timer(*IoService),
+            m_txSocket(*IoService, m_endpoint.protocol()),
+            m_txTimer(*IoService),
             m_broadcastPeriod(Period),
             m_advertisePort(AdvertisePort),
-            m_messageCount(0U)
-    {
+            m_txMessageCount(0U) {
         sendToAllInterfaces(boost::system::error_code()); //send the first heartbeat
     }
 
     void sendToAllInterfaces(const boost::system::error_code &Error) {
         if (!Error){
-            boost::asio::ip::udp::resolver::query query(boost::asio::ip::udp::v4(), boost::asio::ip::host_name(), "");
-            m_resolver.async_resolve(query,
-                                     boost::bind(&CServiceDiscoveryAnnouncer::handleResolve, this,
-                                                 boost::asio::placeholders::error,
-                                                 boost::asio::placeholders::iterator));
+            //hook up
+            queryInterfaces(m_resolver, boost::bind(&CServiceDiscoveryAnnouncer::handleResolve, this,
+                                                    boost::asio::placeholders::error,
+                                                    boost::asio::placeholders::iterator));
         }else{
             //TODO: Log this
         }
@@ -68,7 +97,7 @@ public:
             if (m_outgoingAnnouncements.size()) {
                 m_txBuffer.clear();
                 // serializes multiple objects into one message containing a map using msgpack::packer.
-                ++m_messageCount;
+                ++m_txMessageCount;
                 msgpack::packer<msgpack::sbuffer> packer(&m_txBuffer);
                 packer.pack_map(4);
                 packer.pack(std::string("ver"));
@@ -82,18 +111,18 @@ public:
                 packer.pack("relm");
                 packer.pack("test");
 
-                m_socket.set_option(boost::asio::ip::multicast::enable_loopback(true));
-                m_socket.set_option(boost::asio::ip::multicast::outbound_interface(
+                m_txSocket.set_option(boost::asio::ip::multicast::enable_loopback(true));
+                m_txSocket.set_option(boost::asio::ip::multicast::outbound_interface(
                         m_outgoingAnnouncements.front().to_v4()));
                 m_outgoingAnnouncements.pop_front();
 
-                m_socket.async_send_to(
+                m_txSocket.async_send_to(
                         boost::asio::buffer(m_txBuffer.data(), m_txBuffer.size()), m_endpoint,
                         boost::bind(&CServiceDiscoveryAnnouncer::sendHeartBeat, this,
                                     boost::asio::placeholders::error));
             } else {
-                m_timer.expires_from_now(m_broadcastPeriod);
-                m_timer.async_wait(
+                m_txTimer.expires_from_now(m_broadcastPeriod);
+                m_txTimer.async_wait(
                         boost::bind(&CServiceDiscoveryAnnouncer::sendToAllInterfaces, this,
                                     boost::asio::placeholders::error));
             }
@@ -108,13 +137,13 @@ private:
      */
     boost::asio::ip::udp::resolver m_resolver;
     /**
-     * Holds the undpoint address and port for m_socket
+     * Holds the undpoint address and port for m_txSocket
      */
     boost::asio::ip::udp::endpoint m_endpoint;
     /**
-     * a socket that is used to send heatbeats (note that this instance is reused for all network interfaces)
+     * a socket that is used to send heatbeats (note that this instance is reused for all outgoing network traffic)
      */
-    boost::asio::ip::udp::socket m_socket;
+    boost::asio::ip::udp::socket m_txSocket;
     /**
      * Holds a list of local IPs of local interfaces used for sending heartbeats
      */
@@ -122,7 +151,7 @@ private:
     /**
      * used to pace announcement by the m_broadcastPeriod interval
      */
-    boost::asio::deadline_timer m_timer;
+    boost::asio::deadline_timer m_txTimer;
     /**
      * The period between broadcasts
      */
@@ -136,30 +165,37 @@ private:
     /**
      * The count of transmitted messages
      */
-    size_t m_messageCount;
+    size_t m_txMessageCount;
 };
 
-
+/**
+ * This class listens for advertised services and calls a signal when a new one is discovered
+ */
 class CServiceDiscoveryListener {
 public:
     CServiceDiscoveryListener(std::shared_ptr<boost::asio::io_service> IoService,
                               const std::string &MulticastAddress,
                               uint16_t MulticastPort) :
+            m_resolver(*IoService),
             m_endpoint(boost::asio::ip::address::from_string(MulticastAddress), MulticastPort),
-            m_socket(*IoService, m_endpoint.protocol()),
-            m_messageCount(0U) {
-        m_socket.set_option(boost::asio::ip::udp::socket::reuse_address(true));
-        m_socket.bind(m_endpoint);
-        //TODO: join group on all interfaces
-        m_socket.set_option(boost::asio::ip::multicast::join_group(m_endpoint.address().to_v4(), boost::asio::ip::address::from_string("172.20.10.4").to_v4()));
-        m_socket.set_option(boost::asio::ip::multicast::join_group(m_endpoint.address().to_v4(), boost::asio::ip::address::from_string("10.0.1.13").to_v4()));
-        //m_socket.set_option(boost::asio::ip::multicast::join_group(m_endpoint.address()));
+            m_rxSocket(*IoService, m_endpoint.protocol()),
+            m_rxMessageCount(0U) {
+        m_rxSocket.set_option(boost::asio::ip::udp::socket::reuse_address(true));
+        m_rxSocket.bind(m_endpoint);
         queueReceive(boost::system::error_code());
+        //hook up join group to interface discovery logic
+        m_interfaceChangeNotifier.m_onNewInterface.connect(boost::bind(&CServiceDiscoveryListener::joinGroup, this, _1));
+        queryInterfaces(m_resolver, boost::bind(&CInterfaceChangeNotifier::handleResolve, &m_interfaceChangeNotifier,
+                                                boost::asio::placeholders::iterator));
     }
+    //TODO: create signal for service discovery
 //    boost::signals2::signal<void, CServiceInfo> m_onServiceDiscovery;
 private:
+    void joinGroup(const boost::asio::ip::address &IfcAddress){
+        m_rxSocket.set_option(boost::asio::ip::multicast::join_group(m_endpoint.address().to_v4(), IfcAddress.to_v4()));
+    }
     void queueReceive(const boost::system::error_code &Error){
-        m_socket.async_receive_from(
+        m_rxSocket.async_receive_from(
                 boost::asio::buffer(m_rxBuffer), m_rxEndpoint,
                 boost::bind(&CServiceDiscoveryListener::onReceive, this,
                             boost::asio::placeholders::error,
@@ -172,25 +208,37 @@ private:
             msgpack::unpacked msg;
             msgpack::unpack(&msg, m_rxBuffer.data(), BytesReceived);
             std::cout << msg.get() << std::endl;
-            ++m_messageCount;
+            ++m_rxMessageCount;
         }else {
             //TODO: log error
         }
         queueReceive(boost::system::error_code());
     }
-
+    /**
+     * Used to resolve network interfaces so that heartbeats are received from all known interfaces
+     */
+    boost::asio::ip::udp::resolver m_resolver;
+    /**
+     * the multicast endpoint that we listen to
+     */
     boost::asio::ip::udp::endpoint m_endpoint;
     /**
      * a socket that is used to receive heartbeats
      */
-    boost::asio::ip::udp::socket m_socket;
-
+    boost::asio::ip::udp::socket m_rxSocket;
+    /**
+     * a buffer to hold incoming serialized packets
+     */
     std::array<char, 512> m_rxBuffer;
-
+    /**
+     * used for getting the origin of incoming packets
+     */
     boost::asio::ip::udp::endpoint m_rxEndpoint;
     /**
      * The count of received messages
      */
-    size_t m_messageCount;
+    size_t m_rxMessageCount;
+
+    CInterfaceChangeNotifier m_interfaceChangeNotifier;
 };
 #endif //CSERVICE_DISCOVERY_ANNOUNCER_H
