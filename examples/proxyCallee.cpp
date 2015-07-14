@@ -75,7 +75,7 @@ int main(int argc, char** argv)
         auto parameters = get_parameters(argc, argv);
 
         auto io = std::make_shared<boost::asio::io_service>();
-        CServiceDiscoveryAnnouncer sdMgr(io, "239.0.0.1", 10984, 8001);
+        CServiceDiscoveryAnnouncer sdMgr(io, "239.0.0.1", 10984, 8001, "uav1", "testRealm");
         CServiceDiscoveryListener listener(io, "239.0.0.1", 10984);
         // create a WAMP session that talks over TCP
         //

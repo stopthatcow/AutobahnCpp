@@ -14,6 +14,39 @@
 #include <stdint.h>
 #include <msgpack.hpp>
 
+class CDomainInfo{
+public:
+    std::string wampIp() const{
+        return m_wampIp;
+    }
+    uint16_t wampPort() const{
+        return m_wampPort;
+    }
+    std::string domainName() const{
+        return m_domainName;
+    }
+    std::string realmName() const{
+        return m_realmName;
+    }
+    void wampIp(const std::string &WampIp){
+        m_wampIp = WampIp;
+    }
+    void wampPort(const uint16_t &WampPort){
+        m_wampPort = WampPort;
+    }
+    void domainName(const std::string &DomainName){
+        m_domainName = DomainName;
+    }
+    void realmName(const std::string &RealmName) {
+        m_realmName = RealmName;
+    }
+    MSGPACK_DEFINE(m_wampIp, m_wampPort, m_domainName, m_realmName);
+private:
+    std::string m_wampIp;
+    uint16_t m_wampPort;
+    std::string m_domainName;
+    std::string m_realmName;
+};
 
 template<typename ResolveHandler>
 void queryInterfaces(boost::asio::ip::udp::resolver &Resolver, ResolveHandler Handler){
@@ -26,23 +59,48 @@ void queryInterfaces(boost::asio::ip::udp::resolver &Resolver, ResolveHandler Ha
  */
 class CInterfaceChangeNotifier{
 public:
+    CInterfaceChangeNotifier(boost::asio::io_service &IoService, boost::posix_time::millisec Period_MS = boost::posix_time::millisec(2000U)):
+        m_timer(IoService),
+        m_resolver(IoService),
+        m_period_MS(Period_MS)
+    {
+        //start timer
+        startResolve();
+    }
+    void startResolve(){
+        queryInterfaces(m_resolver, boost::bind(&CInterfaceChangeNotifier::handleResolve, this,
+                                                boost::asio::placeholders::iterator));
+    }
     void handleResolve(boost::asio::ip::udp::resolver::iterator endpoint_iterator){
         std::set<boost::asio::ip::address> newKnownInterfaces;
         for(; endpoint_iterator != boost::asio::ip::udp::resolver::iterator(); ++endpoint_iterator) {
             interfaceSet_t::iterator itt = m_knownInterfaces.find(endpoint_iterator->endpoint().address());
             if(itt == m_knownInterfaces.end()){
                 //found a new interface!
-                std::cout<<"New interface:"<< endpoint_iterator->endpoint().address().to_string() <<std::endl;
+                std::cout<<"Discovered interface:"<< endpoint_iterator->endpoint().address().to_string() <<std::endl;
                 m_onNewInterface( endpoint_iterator->endpoint().address() );
             }
+
             newKnownInterfaces.insert(endpoint_iterator->endpoint().address());
         }
         m_knownInterfaces = newKnownInterfaces;
+        m_timer.expires_from_now(m_period_MS);
+        m_timer.async_wait(boost::bind(&CInterfaceChangeNotifier::startResolve, this));
     }
     boost::signals2::signal<void (const boost::asio::ip::address &)> m_onNewInterface;
 private:
     typedef std::set<boost::asio::ip::address> interfaceSet_t;
     interfaceSet_t m_knownInterfaces;
+    /**
+     * The timer used to periodically update the interface list
+     */
+    boost::asio::deadline_timer m_timer;
+    /**
+    * Used to resolve network interfaces so that heartbeats are received from all known interfaces
+    */
+    boost::asio::ip::udp::resolver m_resolver;
+
+    boost::posix_time::millisec m_period_MS;
 };
 
 class CServiceDiscoveryAnnouncer {
@@ -51,9 +109,13 @@ public:
                                const std::string &MulticastAddress,
                                uint16_t MulticastPort,
                                uint16_t AdvertisePort,
+                               std::string DomainName,
+                               std::string RealmName,
                                boost::posix_time::millisec Period = boost::posix_time::millisec(2000U)) :
             m_resolver(*IoService),
             m_endpoint(boost::asio::ip::address::from_string(MulticastAddress), MulticastPort),
+            m_domainName(DomainName),
+            m_realmName(RealmName),
             m_txSocket(*IoService, m_endpoint.protocol()),
             m_txTimer(*IoService),
             m_broadcastPeriod(Period),
@@ -70,64 +132,70 @@ public:
                                                     boost::asio::placeholders::iterator));
         }else{
             //TODO: Log this
+            std::cerr<< "sendToAllInterfaces error " << Error << std::endl;
         }
     }
 
-    void handleResolve(const boost::system::error_code& error,
-                       boost::asio::ip::udp::resolver::iterator endpoint_iterator)
+    void handleResolve(const boost::system::error_code& Error,
+                       boost::asio::ip::udp::resolver::iterator Itt)
     {
-        if (!error)
+        if (!Error)
         {
             bool startAnnouncements = m_outgoingAnnouncements.empty();
-            for(; endpoint_iterator != boost::asio::ip::udp::resolver::iterator(); ++endpoint_iterator) {
-                m_outgoingAnnouncements.push_back(endpoint_iterator->endpoint().address());
+            for(; Itt != boost::asio::ip::udp::resolver::iterator(); ++Itt) {
+                m_outgoingAnnouncements.push_back(Itt->endpoint().address());
                 //here we are looping over all known network adaptors, queueing an announcement to each
             }
             if(startAnnouncements){
                 //if there was an empty queue, kick off the async send operation
-                sendHeartBeat(error);
+                sendHeartBeat(Error);
             }
         }else{
             //TODO: Log this
+            std::cerr<< "handleResolve error " << Error << std::endl;
         }
     }
 
     void sendHeartBeat(const boost::system::error_code& Error) {
-        if (!Error) {
-            if (m_outgoingAnnouncements.size()) {
-                m_txBuffer.clear();
-                // serializes multiple objects into one message containing a map using msgpack::packer.
-                ++m_txMessageCount;
-                msgpack::packer<msgpack::sbuffer> packer(&m_txBuffer);
-                packer.pack_map(4);
-                packer.pack(std::string("ver"));
-                packer.pack(1);
-                packer.pack(std::string("ip"));
-                packer.pack(m_outgoingAnnouncements.front().to_v4().to_string());
-                packer.pack(std::string("port"));
-                packer.pack(m_advertisePort);
-                packer.pack("name");
-                packer.pack("uav1");
-                packer.pack("relm");
-                packer.pack("test");
+        if (Error) {
+            //TODO: log this
+            std::cerr<< "sendHeartBeat error " << Error << std::endl;
+        }
+        bool sent = false;
+        if (m_outgoingAnnouncements.size()) {
+            m_txBuffer.clear();
+            // serializes multiple objects into one message containing a map using msgpack::packer.
+            ++m_txMessageCount;
+            msgpack::packer<msgpack::sbuffer> packer(&m_txBuffer);
+            CDomainInfo info;
+            info.domainName(m_domainName);
+            info.wampIp(m_outgoingAnnouncements.front().to_v4().to_string());
+            info.wampPort(m_advertisePort);
+            info.realmName(m_realmName);
+            //TODO: add protocol id number
+            packer.pack(1);
+            packer.pack(info);
 
+            try {
                 m_txSocket.set_option(boost::asio::ip::multicast::enable_loopback(true));
-                m_txSocket.set_option(boost::asio::ip::multicast::outbound_interface(
-                        m_outgoingAnnouncements.front().to_v4()));
-                m_outgoingAnnouncements.pop_front();
-
+                m_txSocket.set_option(boost::asio::ip::multicast::outbound_interface(m_outgoingAnnouncements.front().to_v4()));
                 m_txSocket.async_send_to(
                         boost::asio::buffer(m_txBuffer.data(), m_txBuffer.size()), m_endpoint,
                         boost::bind(&CServiceDiscoveryAnnouncer::sendHeartBeat, this,
                                     boost::asio::placeholders::error));
-            } else {
-                m_txTimer.expires_from_now(m_broadcastPeriod);
-                m_txTimer.async_wait(
-                        boost::bind(&CServiceDiscoveryAnnouncer::sendToAllInterfaces, this,
-                                    boost::asio::placeholders::error));
+                sent = true;
+            }catch (const std::exception& e){
+                std::cerr<< "Couldn't set outbound interface" <<std::endl;
             }
-        }else{
-            //TODO: log this
+
+            m_outgoingAnnouncements.pop_front();
+
+        }
+        if(!sent){
+            m_txTimer.expires_from_now(m_broadcastPeriod);
+            m_txTimer.async_wait(
+                    boost::bind(&CServiceDiscoveryAnnouncer::sendToAllInterfaces, this,
+                                boost::asio::placeholders::error));
         }
     }
 
@@ -140,6 +208,10 @@ private:
      * Holds the undpoint address and port for m_txSocket
      */
     boost::asio::ip::udp::endpoint m_endpoint;
+
+    std::string m_domainName;
+
+    std::string m_realmName;
     /**
      * a socket that is used to send heatbeats (note that this instance is reused for all outgoing network traffic)
      */
@@ -168,6 +240,21 @@ private:
     size_t m_txMessageCount;
 };
 
+
+/*
+void deserialize( const msgpack::object &Obj, CDomainInfo *pOut){
+    if(pOut){
+        if (Obj.type != msgpack::type::ARRAY && Obj.via.array.size>=5U) {
+            throw std::runtime_error("message type must be array len>=5");
+        }else {
+            pOut->wampIp(Obj.via.array.ptr[1].as<std::string>());
+            //pOut->wampPort(Obj.via.array.ptr[2].via.i64);
+            //pOut->domainName(Obj.via.array.ptr[3].via.str);
+            //pOut->realmName(Obj.via.array.ptr[4].via.str);
+        }
+    }
+}
+*/
 /**
  * This class listens for advertised services and calls a signal when a new one is discovered
  */
@@ -176,7 +263,7 @@ public:
     CServiceDiscoveryListener(std::shared_ptr<boost::asio::io_service> IoService,
                               const std::string &MulticastAddress,
                               uint16_t MulticastPort) :
-            m_resolver(*IoService),
+            m_interfaceChangeNotifier(*IoService),
             m_endpoint(boost::asio::ip::address::from_string(MulticastAddress), MulticastPort),
             m_rxSocket(*IoService, m_endpoint.protocol()),
             m_rxMessageCount(0U) {
@@ -185,39 +272,57 @@ public:
         queueReceive(boost::system::error_code());
         //hook up join group to interface discovery logic
         m_interfaceChangeNotifier.m_onNewInterface.connect(boost::bind(&CServiceDiscoveryListener::joinGroup, this, _1));
-        queryInterfaces(m_resolver, boost::bind(&CInterfaceChangeNotifier::handleResolve, &m_interfaceChangeNotifier,
-                                                boost::asio::placeholders::iterator));
     }
-    //TODO: create signal for service discovery
-//    boost::signals2::signal<void, CServiceInfo> m_onServiceDiscovery;
+    boost::signals2::signal<void (const CDomainInfo &)> m_onServiceDiscovery;
 private:
     void joinGroup(const boost::asio::ip::address &IfcAddress){
-        m_rxSocket.set_option(boost::asio::ip::multicast::join_group(m_endpoint.address().to_v4(), IfcAddress.to_v4()));
+        try {
+            m_rxSocket.set_option(boost::asio::ip::multicast::join_group(m_endpoint.address().to_v4(),
+                                                                         IfcAddress.to_v4()));
+        }catch (const std::exception& e){
+            std::cerr<< "Couldn't join group" <<std::endl;
+        }
     }
     void queueReceive(const boost::system::error_code &Error){
-        m_rxSocket.async_receive_from(
-                boost::asio::buffer(m_rxBuffer), m_rxEndpoint,
-                boost::bind(&CServiceDiscoveryListener::onReceive, this,
-                            boost::asio::placeholders::error,
-                            boost::asio::placeholders::bytes_transferred));
+        if(!Error) {
+            m_rxSocket.async_receive_from(
+                    boost::asio::buffer(m_rxBuffer), m_rxEndpoint,
+                    boost::bind(&CServiceDiscoveryListener::onReceive, this,
+                                boost::asio::placeholders::error,
+                                boost::asio::placeholders::bytes_transferred));
+        }else{
+            std::cerr<< "queueReceive error " << Error << std::endl;
+        }
     }
 
     void onReceive(const boost::system::error_code &Error, size_t BytesReceived){
         if(!Error){
             //unpack the message
-            msgpack::unpacked msg;
-            msgpack::unpack(&msg, m_rxBuffer.data(), BytesReceived);
-            std::cout << msg.get() << std::endl;
-            ++m_rxMessageCount;
+            size_t offset=0;
+            msgpack::unpacked version = msgpack::unpack(m_rxBuffer.data(), BytesReceived, offset);
+            //todo: check the version #
+            if(version.get().type == msgpack::type::POSITIVE_INTEGER || version.get().as<uint8_t>() != 1U) {
+                msgpack::unpacked body = msgpack::unpack(m_rxBuffer.data(), BytesReceived, offset);
+                std::cout << body.get() << std::endl;
+                ++m_rxMessageCount;
+                CDomainInfo discoveredDomain;
+                body.get().convert(&discoveredDomain);
+                //broadcast to listeners
+                m_onServiceDiscovery(discoveredDomain);
+            }else{
+                ; //TODO: log error
+                std::cerr<< "onReceive got bad packet " << Error << std::endl;
+            }
         }else {
             //TODO: log error
+            std::cerr<< "onReceive error " << Error << std::endl;
         }
         queueReceive(boost::system::error_code());
     }
     /**
-     * Used to resolve network interfaces so that heartbeats are received from all known interfaces
+     * periodically notifies us of any new interfaces that we need to join IGMP group on
      */
-    boost::asio::ip::udp::resolver m_resolver;
+    CInterfaceChangeNotifier m_interfaceChangeNotifier;
     /**
      * the multicast endpoint that we listen to
      */
@@ -238,7 +343,5 @@ private:
      * The count of received messages
      */
     size_t m_rxMessageCount;
-
-    CInterfaceChangeNotifier m_interfaceChangeNotifier;
 };
 #endif //CSERVICE_DISCOVERY_ANNOUNCER_H
