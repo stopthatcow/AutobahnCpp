@@ -66,19 +66,21 @@ void proxy(autobahn::wamp_invocation invocation)
     })));
 }
 
+#include "CServiceDiscoveryManager.h"
+
 int main(int argc, char** argv)
 {
     std::cerr << "Boost: " << BOOST_VERSION << std::endl;
-
     try {
         auto parameters = get_parameters(argc, argv);
 
         auto io = std::make_shared<boost::asio::io_service>();
-
+        CServiceDiscoveryAnnouncer sdMgr(io, "239.0.0.1", 10984, 8001);
+        CServiceDiscoveryListener listener(io, "239.0.0.1", 10984);
         // create a WAMP session that talks over TCP
         //
         auto client = std::make_shared<autobahn::wamp_tcp_client>(io, parameters->rawsocket_endpoint(), "default", parameters->debug());
-        auto remoteClient = std::make_shared<autobahn::wamp_tcp_client>(io, "127.0.0.1", 8001, "default", parameters->debug());
+        auto remoteClient = std::make_shared<autobahn::wamp_tcp_client>(io, "0.0.0.0", 8001, "default", parameters->debug());
 
         gSession = remoteClient;
         // Make sure the continuation futures we use do not run out of scope prematurely.
@@ -90,11 +92,11 @@ int main(int argc, char** argv)
         auto start_future = client->launch().then([&](boost::future<bool> connected){
                         std::cerr << "connectOk:" << connected.get() << std::endl;
                         autobahn::provide_options opts = {std::make_pair("match", msgpack::object("prefix"))};
-                            (*client)->provide("uav1", &proxy, opts);
+                            (*client)->provide("domain1", &proxy, opts);
                         });
         auto f = remoteClient->launch().then([&](boost::future<bool> connected){
             std::cerr << "connectOk:" << connected.get() << std::endl;
-            (*remoteClient)->provide("uav1/add", &add);
+            (*remoteClient)->provide("domain1/add", &add);
         });
 
         std::cerr << "starting io service" << std::endl;
