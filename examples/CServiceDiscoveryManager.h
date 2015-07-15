@@ -72,8 +72,8 @@ public:
         m_timer(IoService),
         m_resolver(IoService),
         m_period_MS(Period_MS)
-    {
-        //start timer
+    {}
+    void launch(){
         startResolve();
     }
     void startResolve(){
@@ -130,9 +130,10 @@ public:
             m_broadcastPeriod(Period),
             m_advertisePort(AdvertisePort),
             m_txMessageCount(0U) {
+    }
+    void launch(){
         sendToAllInterfaces(boost::system::error_code()); //send the first heartbeat
     }
-
     void sendToAllInterfaces(const boost::system::error_code &Error) {
         if (!Error){
             //hook up
@@ -262,9 +263,12 @@ public:
             m_rxMessageCount(0U) {
         m_rxSocket.set_option(boost::asio::ip::udp::socket::reuse_address(true));
         m_rxSocket.bind(m_endpoint);
-        queueReceive(boost::system::error_code());
         //hook up join group to interface discovery logic
         m_interfaceChangeNotifier.m_onNewInterface.connect(boost::bind(&CServiceDiscoveryListener::joinGroup, this, _1));
+    }
+    void launch(){
+        m_interfaceChangeNotifier.launch();
+        queueReceive(boost::system::error_code());
     }
     /**
      * Signal called on discovery of new domain
