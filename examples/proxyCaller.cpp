@@ -44,14 +44,16 @@ int main(int argc, char** argv)
         startFuture = client->launch().then([&](boost::future<bool> connected) {
             std::cerr << "connectOk:" << connected.get() << std::endl;
             std::tuple<uint64_t, uint64_t> arguments(23, 777);
-            callFuture = (*client)->call("domain1/add", arguments).then(
-                    [&](boost::future<autobahn::wamp_call_result> result) {
+            auto start = boost::posix_time::microsec_clock::local_time();
+            callFuture = (*client)->call("uav1/com.examples.calculator.add", arguments).then(
+                    [&, start](boost::future<autobahn::wamp_call_result> result) {
                         uint64_t sum = result.get().argument<uint64_t>(0);
                         std::cerr << "call result: " << sum << std::endl;
+                        auto finish = boost::posix_time::microsec_clock::local_time();
+                        std::cerr<< "Call time (usec):" << (finish-start).total_microseconds() <<std::endl;
                         client.reset();
                     });
         });
-
         std::cerr << "starting io service" << std::endl;
         io->run();
         std::cerr << "stopped io service" << std::endl;

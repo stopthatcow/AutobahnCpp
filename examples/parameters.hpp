@@ -12,15 +12,18 @@ public:
 
     bool debug() const;
     const std::string& realm() const;
+    const std::string& domain() const;
     const boost::asio::ip::tcp::endpoint& rawsocket_endpoint() const;
 
     void set_debug(bool enabled);
     void set_realm(const std::string& realm);
+    void set_domain(const std::string& domain);
     void set_rawsocket_endpoint(const std::string& ip_address, uint16_t port);
 
 private:
     bool m_debug;
     std::string m_realm;
+    std::string m_domain;
     boost::asio::ip::tcp::endpoint m_rawsocket_endpoint;
 };
 

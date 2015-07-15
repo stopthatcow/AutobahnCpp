@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <msgpack.hpp>
 
+static const uint8_t PROTOCOL_VERSION_NUMBER = 1U;
 class CDomainInfo{
 public:
     std::string wampIp() const{
@@ -39,6 +40,14 @@ public:
     }
     void realmName(const std::string &RealmName) {
         m_realmName = RealmName;
+    }
+    std::string fullyQuallifiedName() const{
+        return m_realmName + '/' + m_domainName;
+    }
+    std::string toString() const{
+        std::stringstream stream;
+        stream << fullyQuallifiedName() << '@' << m_wampIp << ':' << m_wampPort;
+        return stream.str();
     }
     MSGPACK_DEFINE(m_wampIp, m_wampPort, m_domainName, m_realmName);
 private:
@@ -172,8 +181,7 @@ public:
             info.wampIp(m_outgoingAnnouncements.front().to_v4().to_string());
             info.wampPort(m_advertisePort);
             info.realmName(m_realmName);
-            //TODO: add protocol id number
-            packer.pack(1);
+            packer.pack(PROTOCOL_VERSION_NUMBER);
             packer.pack(info);
 
             try {
@@ -240,21 +248,6 @@ private:
     size_t m_txMessageCount;
 };
 
-
-/*
-void deserialize( const msgpack::object &Obj, CDomainInfo *pOut){
-    if(pOut){
-        if (Obj.type != msgpack::type::ARRAY && Obj.via.array.size>=5U) {
-            throw std::runtime_error("message type must be array len>=5");
-        }else {
-            pOut->wampIp(Obj.via.array.ptr[1].as<std::string>());
-            //pOut->wampPort(Obj.via.array.ptr[2].via.i64);
-            //pOut->domainName(Obj.via.array.ptr[3].via.str);
-            //pOut->realmName(Obj.via.array.ptr[4].via.str);
-        }
-    }
-}
-*/
 /**
  * This class listens for advertised services and calls a signal when a new one is discovered
  */
@@ -273,6 +266,9 @@ public:
         //hook up join group to interface discovery logic
         m_interfaceChangeNotifier.m_onNewInterface.connect(boost::bind(&CServiceDiscoveryListener::joinGroup, this, _1));
     }
+    /**
+     * Signal called on discovery of new domain
+     */
     boost::signals2::signal<void (const CDomainInfo &)> m_onServiceDiscovery;
 private:
     void joinGroup(const boost::asio::ip::address &IfcAddress){
@@ -301,14 +297,19 @@ private:
             size_t offset=0;
             msgpack::unpacked version = msgpack::unpack(m_rxBuffer.data(), BytesReceived, offset);
             //todo: check the version #
-            if(version.get().type == msgpack::type::POSITIVE_INTEGER || version.get().as<uint8_t>() != 1U) {
+            if(version.get().type == msgpack::type::POSITIVE_INTEGER || version.get().as<uint8_t>() != PROTOCOL_VERSION_NUMBER) {
                 msgpack::unpacked body = msgpack::unpack(m_rxBuffer.data(), BytesReceived, offset);
                 std::cout << body.get() << std::endl;
                 ++m_rxMessageCount;
-                CDomainInfo discoveredDomain;
-                body.get().convert(&discoveredDomain);
+                CDomainInfo thisDomain;
+                body.get().convert(&thisDomain);
                 //broadcast to listeners
-                m_onServiceDiscovery(discoveredDomain);
+                const std::string fullyQuallifiedName = thisDomain.fullyQuallifiedName();
+                domainMap_t::iterator itt = m_knownDomains.find(fullyQuallifiedName);
+                if(itt == m_knownDomains.end()){
+                    m_knownDomains[fullyQuallifiedName] = thisDomain;
+                    m_onServiceDiscovery(thisDomain);
+                }
             }else{
                 ; //TODO: log error
                 std::cerr<< "onReceive got bad packet " << Error << std::endl;
@@ -319,6 +320,8 @@ private:
         }
         queueReceive(boost::system::error_code());
     }
+    typedef std::map<std::string, CDomainInfo> domainMap_t;
+    domainMap_t m_knownDomains;
     /**
      * periodically notifies us of any new interfaces that we need to join IGMP group on
      */
@@ -334,7 +337,7 @@ private:
     /**
      * a buffer to hold incoming serialized packets
      */
-    std::array<char, 512> m_rxBuffer;
+    std::array<char, 512U> m_rxBuffer;
     /**
      * used for getting the origin of incoming packets
      */

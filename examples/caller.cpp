@@ -62,10 +62,13 @@ int main(int argc, char** argv)
                             std::cerr << "joined realm: " << s.get() << std::endl;
 
                             std::tuple<uint64_t, uint64_t> arguments(23, 777);
-                            call_future = session->call("com.examples.proxy", arguments).then(
-                            [&](boost::future<autobahn::wamp_call_result> result) {
+                            auto start = boost::posix_time::microsec_clock::local_time();
+                            call_future = session->call("com.examples.calculator.add", arguments).then(
+                            [&, start](boost::future<autobahn::wamp_call_result> result) {
                                 uint64_t sum = result.get().argument<uint64_t>(0);
                                 std::cerr << "call result: " << sum << std::endl;
+                                auto finish = boost::posix_time::microsec_clock::local_time();
+                                std::cerr<< "Call time (usec):" << (finish-start).total_microseconds() <<std::endl;
                                 leave_future = session->leave().then([&](boost::future<std::string> reason) {
                                     std::cerr << "left session (" << reason.get() << ")" << std::endl;
                                     stop_future = session->stop().then([&](boost::future<void> stopped) {
