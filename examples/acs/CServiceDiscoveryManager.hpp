@@ -42,13 +42,13 @@ public:
 
 private:
     /**
-    * @brief Holds the undpoint address and port for m_txSocket
+    * @brief Holds the endpoint address and port for m_txSocket
     */
     boost::asio::ip::udp::endpoint m_endpoint;
-
-    std::string m_domainName;
-
-    std::string m_realmName;
+    /**
+     * @brief the domain info that this announcer will send out
+     */
+    CDomainInfo m_domainInfo;
     /**
     * @brief a socket that is used to send heatbeats (note that this instance is reused for all outgoing network traffic)
     */
@@ -65,12 +65,10 @@ private:
     * @brief The period between broadcasts
     */
     boost::posix_time::millisec m_broadcastPeriod;
-
-    msgpack::sbuffer m_txBuffer;
     /**
-    * @brief Port advertised for connection via heartbeat
-    */
-    uint16_t m_advertisePort;
+     * @brief buffer used to hold outgoing data
+     */
+    msgpack::sbuffer m_txBuffer;
     /**
     * @brief The count of transmitted messages
     */
@@ -85,7 +83,9 @@ public:
     CServiceDiscoveryListener(std::shared_ptr<boost::asio::io_service> IoService,
                               const std::string &MulticastAddress,
                               uint16_t MulticastPort);
-
+    /**
+     * @brief queue the async loop to start
+     */
     void launch();
 
     /**
@@ -109,13 +109,13 @@ private:
     * @brief the multicast endpoint that we listen to
     */
     boost::asio::ip::udp::endpoint m_endpoint;
-
     /**
     * @brief a socket that is used to receive heartbeats
     */
     boost::asio::ip::udp::socket m_rxSocket;
     /**
     * @brief a buffer to hold incoming serialized packets
+    * @todo: more inteligently size this
     */
     std::array<char, 512U> m_rxBuffer;
     /**
@@ -127,6 +127,6 @@ private:
     */
     size_t m_rxMessageCount;
 };
-}
-}
+} /*namespace acs*/
+} /*namespace airware*/
 #endif //CSERVICE_DISCOVERY_ANNOUNCER_H

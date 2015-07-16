@@ -18,28 +18,30 @@ int getInterfaceAddresses(interfaceAddressSet_t *pIfcIpAddresses) {
     if (pIfcIpAddresses) {
         // Allocate a 15 KB buffer to start with.
         outBufLen = 15 * 1024;
-        DWORD dwRetVal = ERROR_BUFFER_OVERFLOW;
+        DWORD rawRetVal = ERROR_BUFFER_OVERFLOW;
         std::unique_ptr<IP_ADAPTER_ADDRESSES *> pAddresses;
 
-        for (int iteration = 0; (dwRetVal == ERROR_BUFFER_OVERFLOW) && (iteration < 3); ++iteration) {
+        for (int iteration = 0; (rawRetVal == ERROR_BUFFER_OVERFLOW) && (iteration < 3); ++iteration) {
             pAddresses.reset(new char[outBufLen]);
-            dwRetVal = GetAdaptersAddresses(family, flags, NULL, pAddresses, &outBufLen);
+            rawRetVal = GetAdaptersAddresses(family, flags, NULL, pAddresses, &outBufLen);
         }
+        ret = rawRetVal;
 
-        if (dwRetVal == NO_ERROR) {
+        if (rawRetVal == NO_ERROR) {
+            ret = 0;
             for (IP_ADAPTER_ADDRESSES *pCurrAddresses = pAddresses.get(); pCurrAddresses; pCurrAddresses = pCurrAddresses->Next) {
                 const SOCKET_ADDRESS &address = pCurrAddresses->FirstUnicastAddress.Address;
 
                 char ipString[NI_MAXHOST] = {0};
-                int status = getnameinfo(address.lpSockaddr, address.iSockaddrLength, buf, sizeof(buf), NULL, 0, NI_NUMERICHOST);
-                if(status==0){
+                ret = getnameinfo(address.lpSockaddr, address.iSockaddrLength, buf, sizeof(buf), NULL, 0, NI_NUMERICHOST);
+                if(ret==0){
                     pIfcIpAddresses->insert(boost::asio::ip::address::from_string(ipString));
                 }else{
-                    std::cerr<< "getnameinfo() failed:"<<status<< std::endl;
+                    std::cerr<< "getnameinfo() failed:"<<ret<< std::endl;
                 }
             }
         } else {
-            std::cerr<< "GetAdaptersAddresses() failed:"<<dwRetVal<<std::endl;
+            std::cerr<< "GetAdaptersAddresses() failed:"<<ret<<std::endl;
         }
     }
 

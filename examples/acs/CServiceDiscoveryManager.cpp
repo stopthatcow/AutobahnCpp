@@ -8,7 +8,6 @@
 
 #include "acs/CServiceDiscoveryManager.hpp"
 
-
 namespace airware {
 namespace acs {
 const uint8_t CServiceDiscoveryAnnouncer::PROTOCOL_VERSION_NUMBER=1;
@@ -20,13 +19,14 @@ CServiceDiscoveryAnnouncer::CServiceDiscoveryAnnouncer(std::shared_ptr<boost::as
                                                        std::string RealmName,
                                                        boost::posix_time::millisec Period) :
     m_endpoint(boost::asio::ip::address::from_string(MulticastAddress), MulticastPort),
-    m_domainName(DomainName),
-    m_realmName(RealmName),
     m_txSocket(*IoService, m_endpoint.protocol()),
     m_txTimer(*IoService),
     m_broadcastPeriod(Period),
-    m_advertisePort(AdvertisePort),
-    m_txMessageCount(0U) {
+    m_txMessageCount(0U)
+{
+    m_domainInfo.domainName(DomainName);
+    m_domainInfo.realmName(RealmName);
+    m_domainInfo.wampPort(AdvertisePort);
 }
 
 void CServiceDiscoveryAnnouncer::launch() {
@@ -47,7 +47,6 @@ void CServiceDiscoveryAnnouncer::sendToAllInterfaces(const boost::system::error_
             sendHeartBeat(Error);
         }
     } else {
-        //TODO: Log this
         std::cerr << "sendToAllInterfaces error " << Error << std::endl;
     }
 }
@@ -62,13 +61,9 @@ void CServiceDiscoveryAnnouncer::sendHeartBeat(const boost::system::error_code &
         // serializes multiple objects into one message containing a map using msgpack::packer.
         ++m_txMessageCount;
         msgpack::packer<msgpack::sbuffer> packer(&m_txBuffer);
-        CDomainInfo info;
-        info.domainName(m_domainName);
-        info.wampIp(m_outgoingAnnouncements.front().to_v4().to_string());
-        info.wampPort(m_advertisePort);
-        info.realmName(m_realmName);
+        m_domainInfo.wampIp(m_outgoingAnnouncements.front().to_v4().to_string());
         packer.pack(CDomainInfo::PROTOCOL_VERSION_NUMBER);
-        packer.pack(info);
+        packer.pack(m_domainInfo);
 
         try {
             m_txSocket.set_option(boost::asio::ip::multicast::enable_loopback(true));
@@ -141,9 +136,8 @@ void CServiceDiscoveryListener::onReceive(const boost::system::error_code &Error
         //unpack the message
         size_t offset = 0;
         msgpack::unpacked version = msgpack::unpack(m_rxBuffer.data(), BytesReceived, offset);
-        //todo: check the version #
-        if (version.get().type == msgpack::type::POSITIVE_INTEGER ||
-                version.get().as<uint8_t>() != CServiceDiscoveryAnnouncer::PROTOCOL_VERSION_NUMBER) {
+        if (version.get().type == msgpack::type::POSITIVE_INTEGER &&
+                version.get().as<uint8_t>() == CServiceDiscoveryAnnouncer::PROTOCOL_VERSION_NUMBER) {
             msgpack::unpacked body = msgpack::unpack(m_rxBuffer.data(), BytesReceived, offset);
             std::cout << body.get() << std::endl;
             ++m_rxMessageCount;
@@ -156,15 +150,14 @@ void CServiceDiscoveryListener::onReceive(const boost::system::error_code &Error
                 m_knownDomains[fullyQuallifiedName] = thisDomain;
                 m_onServiceDiscovery(thisDomain);
             }
-        } else { ; //TODO: log error
+        } else {
             std::cerr << "onReceive got bad packet " << Error << std::endl;
         }
     } else {
-        //TODO: log error
         std::cerr << "onReceive error " << Error << std::endl;
     }
     queueReceive(boost::system::error_code());
 }
 
-}
-}
+} /*namespace acs*/
+} /*namespace airware*/

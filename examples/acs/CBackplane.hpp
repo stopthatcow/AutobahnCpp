@@ -42,7 +42,7 @@ private:
     std::shared_ptr<boost::asio::io_service> m_io;
 };
 
-}
-}
+} /*namespace acs*/
+} /*namespace airware*/
 #endif // ACS_CBACKPLANE_HPP
 

@@ -40,5 +40,5 @@ void CInterfaceChangeNotifier::resolveInterfaces() {
     m_timer.expires_from_now(m_period_MS);
     m_timer.async_wait(boost::bind(&CInterfaceChangeNotifier::resolveInterfaces, this));
 }
-}
-}
+} /*namespace acs*/
+} /*namespace airware*/

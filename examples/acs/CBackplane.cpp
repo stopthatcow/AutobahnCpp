@@ -42,7 +42,7 @@ void CBackplane::proxy(autobahn::wamp_invocation invocation) {
                 invocation->result(result.arguments<std::list<msgpack::object>>(),
                                    result.kw_arguments<std::unordered_map<std::string, msgpack::object>>());
                 std::cerr << "sent proxy reply" << std::endl;
-                //TODO: Send back error if one was present
+                //TODO: Send back error if one was present (seemingly not currently supported by autobahnCpp)
             }).detach();
         } else {
             invocation->error("target domain is unknown");
@@ -108,5 +108,5 @@ int CBackplane::main(int argc, char **argv) {
     return 0;
 }
 
-}
-}
+} /*namespace acs*/
+} /*namespace airware*/
