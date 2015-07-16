@@ -25,9 +25,6 @@
 #include <tuple>
 #include <future>
 
-std::vector<std::future<void>> calls;
-
-
 #include "CServiceDiscoveryManager.h"
 
 class CBackplane {
@@ -56,14 +53,14 @@ public:
                                                                                      invocation->arguments<std::list<msgpack::object>>(),
                                                                                      invocation->kw_arguments<std::unordered_map<std::string, msgpack::object>>());
             //TODO: see if we can post this work to the io service via dispatch()
-            calls.push_back(std::move( std::async(std::launch::async, [&callFuture, invocation]{
+            std::thread([&callFuture, invocation]{
                 std::cerr<< "Called" << std::endl;
                 autobahn::wamp_call_result result = callFuture.get();
                 invocation->result(result.arguments<std::list<msgpack::object>>(),
                                    result.kw_arguments<std::unordered_map<std::string, msgpack::object>>());
                 std::cerr<< "sent proxy reply" << std::endl;
                 //TODO: Send back error if one was present
-            })));
+            }).detach();
         }else{
             invocation->error("target domain is unknown");
         }
@@ -124,6 +121,7 @@ private:
     sessionMap_t m_sessionMap;
     std::shared_ptr<boost::asio::io_service> m_io;
 };
+
 
 int main(int argc, char** argv)
 {
