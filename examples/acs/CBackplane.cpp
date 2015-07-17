@@ -24,14 +24,14 @@ void CBackplane::proxy(autobahn::wamp_invocation invocation) {
         invocation->error(e.what());
         return;
     }
-    std::vector<std::string> words;
-    boost::split(words, procedure, boost::is_any_of("/"), boost::token_compress_on);
-    if(words.size()==2U){
-        const std::string &domainName = words[0];
-        const std::string &procedureName = words[1];
+    std::vector<std::string> procedureComponents;
+    boost::split(procedureComponents, procedure, boost::is_any_of("/"), boost::token_compress_on);
+    if(procedureComponents.size()==2U){
+        const std::string &domainName = procedureComponents[0];
+        const std::string &procedureName = procedureComponents[1];
         sessionMap_t::iterator itt = m_sessionMap.find(domainName);
 
-        if (itt != m_sessionMap.end()) {
+        if (itt != m_sessionMap.end() && itt->second.first->isConnected()) {
             std::cerr << "Calling " << procedureName << " on " << domainName << std::endl;
             boost::future<autobahn::wamp_call_result> callFuture = (*(itt->second.first))->call(procedureName,
                                                                                                 invocation->arguments<std::list<msgpack::object>>(),
@@ -53,13 +53,19 @@ void CBackplane::proxy(autobahn::wamp_invocation invocation) {
 }
 
 boost::future<void> CBackplane::launchClient(std::string DomainName,
-                                 std::shared_ptr<autobahn::wamp_tcp_client> NewClient) {
-    return NewClient->launch().then([&, DomainName](boost::future<bool> connected) {
+                                             std::shared_ptr<autobahn::wamp_tcp_client> NewClient) {
+    return NewClient->launch().then([&, DomainName, NewClient](boost::future<bool> connected) {
         std::string prefix = DomainName + '/';
+        bool connectSuccess = connected.get();
         std::cerr << "connectOk:" << connected.get() << std::endl;
-        autobahn::provide_options opts = {std::make_pair("match", msgpack::object("prefix"))};
-        (*m_localClient)->provide(prefix, boost::bind(&CBackplane::proxy, this, _1), opts).wait();
-        std::cerr << "local client now providing services targeting \"" << prefix << '\"' << std::endl;
+        if(connectSuccess){
+            autobahn::provide_options opts = {std::make_pair("match", msgpack::object("prefix"))};
+            (*m_localClient)->provide(prefix, boost::bind(&CBackplane::proxy, this, _1), opts).wait();
+            std::cerr << "local client now providing services targeting \"" << prefix << '\"' << std::endl;
+            m_sessionMap[DomainName].first = NewClient;
+        }else{
+            //TODO: need to remove NewClient from the session map
+        }
     });
 }
 
@@ -72,7 +78,7 @@ void CBackplane::connectToNewDomain(const CDomainInfo &NewDomain) {
                                                                         NewDomain.wampPort(), "default",
                                                                         false);
         boost::future<void> connectFuture = launchClient(NewDomain.domainName(), remoteClient);
-        m_sessionMap[NewDomain.domainName()] = {remoteClient, std::move(connectFuture)};
+        m_sessionMap[NewDomain.domainName()] = {std::move(remoteClient), std::move(connectFuture)};
     }
 }
 
@@ -89,12 +95,11 @@ int CBackplane::main(int argc, char **argv) {
         CServiceDiscoveryListener listener(m_io, "239.0.0.1", 10984);
         listener.m_onServiceDiscovery.connect(boost::bind(&CBackplane::connectToNewDomain, this, _1));
 
-        auto connectFuture = launchClient(parameters->domain(), m_localClient).then(
-                    [&](boost::future<void>) {
+        auto connectFuture = launchClient(parameters->domain(), m_localClient).then([&](boost::future<void>) {
                 //now we are ready to start service discovery:
                 announcer.launch();
                 listener.launch();
-    });
+        });
         m_sessionMap[parameters->domain()] = {m_localClient, std::move(connectFuture)};
 
         std::cerr << "starting io service" << std::endl;
