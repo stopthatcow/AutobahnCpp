@@ -9,7 +9,7 @@
 #ifndef ACS_CBACKPLANE_HPP
 #define ACS_CBACKPLANE_HPP
 
-#include "acs/CServiceDiscoveryManager.hpp"
+#include "acs/CDomainDiscoveryManager.hpp"
 #include "parameters.hpp"
 #include <autobahn/autobahn.hpp>
 #include <boost/asio.hpp>
@@ -35,11 +35,13 @@ public:
     int main(int argc, char **argv);
 
 private:
-    typedef std::pair<std::shared_ptr<autobahn::wamp_tcp_client>, boost::future<void>> mapEntry_t;
     std::shared_ptr<autobahn::wamp_tcp_client> m_localClient;
-    typedef std::map<std::string, mapEntry_t> sessionMap_t;
+    typedef std::map<std::string, std::shared_ptr<autobahn::wamp_tcp_client>> sessionMap_t;
+    std::vector<boost::future<void>> m_outstandingFutures;
     sessionMap_t m_sessionMap;
     std::shared_ptr<boost::asio::io_service> m_io;
+    std::shared_ptr<CDomainDiscoveryAnnouncer> m_announcer;
+    std::shared_ptr<CDomainDiscoveryListener> m_listener;
 };
 
 } /*namespace acs*/

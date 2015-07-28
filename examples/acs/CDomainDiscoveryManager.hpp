@@ -1,6 +1,6 @@
 /**
-  * @brief contains declaration for class CServiceDiscoveryManager
-  * @file CServiceDiscoveryManager.hpp
+  * @brief contains declaration for class CDomainDiscoveryManager
+  * @file CDomainDiscoveryManager.hpp
   * @author nwiles
   * @copyright Copyright (c) 2015 Airware. All rights reserved.
   * @date 2015-7-16
@@ -23,10 +23,10 @@
 
 namespace airware {
 namespace acs {
-class CServiceDiscoveryAnnouncer {
+class CDomainDiscoveryAnnouncer {
 public:
     static const uint8_t PROTOCOL_VERSION_NUMBER;
-    CServiceDiscoveryAnnouncer(std::shared_ptr<boost::asio::io_service> IoService,
+    CDomainDiscoveryAnnouncer(std::shared_ptr<boost::asio::io_service> IoService,
                                const std::string &MulticastAddress,
                                uint16_t MulticastPort,
                                uint16_t AdvertisePort,
@@ -78,9 +78,9 @@ private:
 /**
 * @brief This class listens for advertised services and calls a signal when a new one is discovered
 */
-class CServiceDiscoveryListener {
+class CDomainDiscoveryListener {
 public:
-    CServiceDiscoveryListener(std::shared_ptr<boost::asio::io_service> IoService,
+    CDomainDiscoveryListener(std::shared_ptr<boost::asio::io_service> IoService,
                               const std::string &MulticastAddress,
                               uint16_t MulticastPort);
     /**
@@ -91,7 +91,11 @@ public:
     /**
     * @brief Signal called on discovery of new domain
     */
-    boost::signals2::signal<void(const CDomainInfo &)> m_onServiceDiscovery;
+    boost::signals2::signal<void(const CDomainInfo &)> m_onDomainDiscovery;
+    void erase(const std::string &DomainName){
+        m_knownDomains.erase(DomainName);
+    }
+
 private:
     void joinGroup(const boost::asio::ip::address &IfcAddress);
 

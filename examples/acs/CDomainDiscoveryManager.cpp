@@ -1,17 +1,17 @@
 /**
-  * @brief contains implemenatation for class CServiceDiscoveryManager
-  * @file CServiceDiscoveryManager.cpp
+  * @brief contains implemenatation for class CDomainDiscoveryManager
+  * @file CDomainDiscoveryManager.cpp
   * @author nwiles
   * @copyright Copyright (c) 2015 Airware. All rights reserved.
   * @date 2015-7-16
 */
 
-#include "acs/CServiceDiscoveryManager.hpp"
+#include "acs/CDomainDiscoveryManager.hpp"
 
 namespace airware {
 namespace acs {
-const uint8_t CServiceDiscoveryAnnouncer::PROTOCOL_VERSION_NUMBER=1;
-CServiceDiscoveryAnnouncer::CServiceDiscoveryAnnouncer(std::shared_ptr<boost::asio::io_service> IoService,
+const uint8_t CDomainDiscoveryAnnouncer::PROTOCOL_VERSION_NUMBER=1;
+CDomainDiscoveryAnnouncer::CDomainDiscoveryAnnouncer(std::shared_ptr<boost::asio::io_service> IoService,
                                                        const std::string &MulticastAddress,
                                                        uint16_t MulticastPort,
                                                        uint16_t AdvertisePort,
@@ -29,11 +29,11 @@ CServiceDiscoveryAnnouncer::CServiceDiscoveryAnnouncer(std::shared_ptr<boost::as
     m_domainInfo.wampPort(AdvertisePort);
 }
 
-void CServiceDiscoveryAnnouncer::launch() {
+void CDomainDiscoveryAnnouncer::launch() {
     sendToAllInterfaces(boost::system::error_code()); //send the first heartbeat
 }
 
-void CServiceDiscoveryAnnouncer::sendToAllInterfaces(const boost::system::error_code &Error) {
+void CDomainDiscoveryAnnouncer::sendToAllInterfaces(const boost::system::error_code &Error) {
     if (!Error) {
         bool startAnnouncements = m_outgoingAnnouncements.empty();
         interfaceAddressSet_t ifcIps;
@@ -51,7 +51,7 @@ void CServiceDiscoveryAnnouncer::sendToAllInterfaces(const boost::system::error_
     }
 }
 
-void CServiceDiscoveryAnnouncer::sendHeartBeat(const boost::system::error_code &Error) {
+void CDomainDiscoveryAnnouncer::sendHeartBeat(const boost::system::error_code &Error) {
     if (Error) {
         std::cerr << "sendHeartBeat error: "<< Error.message() << Error << std::endl;
     }
@@ -72,7 +72,7 @@ void CServiceDiscoveryAnnouncer::sendHeartBeat(const boost::system::error_code &
                             m_outgoingAnnouncements.front().to_v4()));
             m_txSocket.async_send_to(
                         boost::asio::buffer(m_txBuffer.data(), m_txBuffer.size()), m_endpoint,
-                        boost::bind(&CServiceDiscoveryAnnouncer::sendHeartBeat, this,
+                        boost::bind(&CDomainDiscoveryAnnouncer::sendHeartBeat, this,
                                     boost::asio::placeholders::error));
             sent = true;
         } catch (const std::exception &e) {
@@ -85,13 +85,13 @@ void CServiceDiscoveryAnnouncer::sendHeartBeat(const boost::system::error_code &
     if (!sent) {
         m_txTimer.expires_from_now(m_broadcastPeriod);
         m_txTimer.async_wait(
-                    boost::bind(&CServiceDiscoveryAnnouncer::sendToAllInterfaces, this,
+                    boost::bind(&CDomainDiscoveryAnnouncer::sendToAllInterfaces, this,
                                 boost::asio::placeholders::error));
     }
 }
 
 
-CServiceDiscoveryListener::CServiceDiscoveryListener(std::shared_ptr<boost::asio::io_service> IoService,
+CDomainDiscoveryListener::CDomainDiscoveryListener(std::shared_ptr<boost::asio::io_service> IoService,
                           const std::string &MulticastAddress,
                           uint16_t MulticastPort) :
     m_interfaceChangeNotifier(*IoService),
@@ -102,15 +102,15 @@ CServiceDiscoveryListener::CServiceDiscoveryListener(std::shared_ptr<boost::asio
     m_rxSocket.bind(m_endpoint);
     //hook up join group to interface discovery logic
     m_interfaceChangeNotifier.m_onNewInterface.connect(
-                boost::bind(&CServiceDiscoveryListener::joinGroup, this, _1));
+                boost::bind(&CDomainDiscoveryListener::joinGroup, this, _1));
 }
 
-void CServiceDiscoveryListener::launch() {
+void CDomainDiscoveryListener::launch() {
     m_interfaceChangeNotifier.launch();
     queueReceive(boost::system::error_code());
 }
 
-void CServiceDiscoveryListener::joinGroup(const boost::asio::ip::address &IfcAddress) {
+void CDomainDiscoveryListener::joinGroup(const boost::asio::ip::address &IfcAddress) {
     try {
         m_rxSocket.set_option(boost::asio::ip::multicast::join_group(m_endpoint.address().to_v4(),
                                                                      IfcAddress.to_v4()));
@@ -119,11 +119,11 @@ void CServiceDiscoveryListener::joinGroup(const boost::asio::ip::address &IfcAdd
     }
 }
 
-void CServiceDiscoveryListener::queueReceive(const boost::system::error_code &Error) {
+void CDomainDiscoveryListener::queueReceive(const boost::system::error_code &Error) {
     if (!Error) {
         m_rxSocket.async_receive_from(
                     boost::asio::buffer(m_rxBuffer), m_rxEndpoint,
-                    boost::bind(&CServiceDiscoveryListener::onReceive, this,
+                    boost::bind(&CDomainDiscoveryListener::onReceive, this,
                                 boost::asio::placeholders::error,
                                 boost::asio::placeholders::bytes_transferred));
     } else {
@@ -131,24 +131,24 @@ void CServiceDiscoveryListener::queueReceive(const boost::system::error_code &Er
     }
 }
 
-void CServiceDiscoveryListener::onReceive(const boost::system::error_code &Error, size_t BytesReceived) {
+void CDomainDiscoveryListener::onReceive(const boost::system::error_code &Error, size_t BytesReceived) {
     if (!Error) {
         //unpack the message
         size_t offset = 0;
         msgpack::unpacked version = msgpack::unpack(m_rxBuffer.data(), BytesReceived, offset);
         if (version.get().type == msgpack::type::POSITIVE_INTEGER &&
-                version.get().as<uint8_t>() == CServiceDiscoveryAnnouncer::PROTOCOL_VERSION_NUMBER) {
+                version.get().as<uint8_t>() == CDomainDiscoveryAnnouncer::PROTOCOL_VERSION_NUMBER) {
             msgpack::unpacked body = msgpack::unpack(m_rxBuffer.data(), BytesReceived, offset);
             std::cout << body.get() << std::endl;
             ++m_rxMessageCount;
             CDomainInfo thisDomain;
             body.get().convert(&thisDomain);
             //broadcast to listeners
-            const std::string fullyQuallifiedName = thisDomain.fullyQuallifiedName();
-            domainMap_t::iterator itt = m_knownDomains.find(fullyQuallifiedName);
+            const std::string name = thisDomain.domainName();
+            domainMap_t::iterator itt = m_knownDomains.find(name);
             if (itt == m_knownDomains.end()) {
-                m_knownDomains[fullyQuallifiedName] = thisDomain;
-                m_onServiceDiscovery(thisDomain);
+                m_knownDomains[name] = thisDomain;
+                m_onDomainDiscovery(thisDomain);
             }
         } else {
             std::cerr << "onReceive got bad packet " << Error << std::endl;

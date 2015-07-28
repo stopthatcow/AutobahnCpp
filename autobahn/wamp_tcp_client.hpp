@@ -85,6 +85,7 @@ public:
                         m_joinFuture = m_pSession->join(m_realm).then([&](boost::future<uint64_t> connected) {
                         m_isConnected=true;
                         m_connected.set_value(true);
+                        m_onConnect();
 
             });
             });
@@ -106,12 +107,15 @@ public:
 std::shared_ptr<wamp_tcp_session_t> &operator->() {
     return m_pSession;
 }
-
+//signals emitted
+boost::signals2::signal<void()> m_onDisconnect;
+boost::signals2::signal<void()> m_onConnect;
 private:
 void handleRxError(const boost::system::error_code &Code){
-    std::cerr<< "Got rx error, closing socket: "<< Code.message() << std::endl;
-    m_pSocket->close();
-    //need to remove this session from the list
+    //if(m_debug){
+        std::cerr<< "Got rx error, closing socket: "<< Code.message() << std::endl;
+   // }
+    m_onDisconnect();
 }
 
 boost::future<void> m_startFuture; ///<holds the future of the start() operation

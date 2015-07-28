@@ -552,6 +552,10 @@ template<typename IStream, typename OStream>
 void wamp_session<IStream, OStream>::handleRxError(const boost::system::error_code &error){
     //specifically catch any non-error returns
     if(error != boost::asio::error::operation_aborted){
+        std::cerr << "caught error" <<std::endl;
+        m_session_leave.set_value("socket closed");
+        leave().wait();
+        stop().wait();
         m_onRxError(error);
     }
 }
@@ -1143,34 +1147,38 @@ void wamp_session<IStream, OStream>::got_message(
 template<typename IStream, typename OStream>
 void wamp_session<IStream, OStream>::send(const std::shared_ptr<msgpack::sbuffer>& buffer)
 {
-    if (!m_stopped) {
-        if (m_debug) {
-            std::cerr << "TX message (" << buffer->size() << " octets) ..." << std::endl;
+    try{
+        if (!m_stopped) {
+            if (m_debug) {
+                std::cerr << "TX message (" << buffer->size() << " octets) ..." << std::endl;
+            }
+
+            // FIXME: rework this for queuing, async_write using gathered write
+            //
+            // boost::asio::write(m_out, std::vector<boost::asio::const_buffer>& out_vec, handler);
+
+            // http://www.boost.org/doc/libs/1_55_0/doc/html/boost_asio/reference/const_buffer/const_buffer/overload2.html
+            // http://www.boost.org/doc/libs/1_55_0/doc/html/boost_asio/reference/async_write/overload1.html
+
+            std::size_t written = 0;
+
+            // write message length prefix
+            uint32_t len = htonl(buffer->size());
+            written += boost::asio::write(m_out, boost::asio::buffer((char*)&len, sizeof(len)));
+
+            // write actual serialized message
+            written += boost::asio::write(m_out, boost::asio::buffer(buffer->data(), buffer->size()));
+
+            if (m_debug) {
+                std::cerr << "TX message sent (" << written << " / " << (sizeof(len) + buffer->size()) << " octets)" << std::endl;
+            }
+        } else {
+            if (m_debug) {
+                std::cerr << "TX message skipped since session stopped (" << buffer->size() << " octets)." << std::endl;
+            }
         }
-
-        // FIXME: rework this for queuing, async_write using gathered write
-        //
-        // boost::asio::write(m_out, std::vector<boost::asio::const_buffer>& out_vec, handler);
-
-        // http://www.boost.org/doc/libs/1_55_0/doc/html/boost_asio/reference/const_buffer/const_buffer/overload2.html
-        // http://www.boost.org/doc/libs/1_55_0/doc/html/boost_asio/reference/async_write/overload1.html
-
-        std::size_t written = 0;
-
-        // write message length prefix
-        uint32_t len = htonl(buffer->size());
-        written += boost::asio::write(m_out, boost::asio::buffer((char*)&len, sizeof(len)));
-
-        // write actual serialized message
-        written += boost::asio::write(m_out, boost::asio::buffer(buffer->data(), buffer->size()));
-
-        if (m_debug) {
-            std::cerr << "TX message sent (" << written << " / " << (sizeof(len) + buffer->size()) << " octets)" << std::endl;
-        }
-    } else {
-        if (m_debug) {
-            std::cerr << "TX message skipped since session stopped (" << buffer->size() << " octets)." << std::endl;
-        }
+    }catch (...){
+        std::cerr<<"send error"<<std::endl;
     }
 }
 

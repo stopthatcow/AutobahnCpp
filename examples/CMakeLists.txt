@@ -7,8 +7,8 @@ add_library(examples_parameters ${PARAMETERS_SOURCES} ${PARAMETERS_HEADERS})
 
 add_library(acs acs/getInterfaceAddresses.hpp
                 acs/getInterfaceAddresses.cpp
-                acs/CServiceDiscoveryManager.hpp
-                acs/CServiceDiscoveryManager.cpp
+                acs/CDomainDiscoveryManager.hpp
+                acs/CDomainDiscoveryManager.cpp
                 acs/CDomainInfo.hpp
                 acs/CDomainInfo.cpp
                 acs/CInterfaceChangeNotifier.hpp
@@ -20,7 +20,7 @@ include_directories(${CMAKE_SOURCE_DIR}/examples)
 
 set(CALLER_SOURCES caller.cpp)
 set(PROXY_CALLER_SOURCES proxyCaller.cpp)
-set(CALLEE_SOURCES callee.cpp)
+set(CALLEE_SOURCES callee2.cpp)
 set(PUBLISHER_SOURCES publisher.cpp)
 set(SUBSCRIBER_SOURCES subscriber.cpp)
 
