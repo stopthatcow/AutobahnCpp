@@ -65,6 +65,9 @@ public:
         m_pSocket.reset();
         m_connected = boost::promise<bool>();
         m_pSocket = std::make_shared<boost::asio::ip::tcp::socket>(*m_pIo);
+        m_pSocket->open(boost::asio::ip::tcp::v4());
+        boost::asio::ip::tcp::no_delay option(true);
+        m_pSocket->set_option(option);
         m_pSession = std::make_shared<wamp_tcp_session_t>(*m_pIo, *m_pSocket, *m_pSocket, m_debug);
         m_pSession->m_onRxError.connect(boost::bind(&wamp_tcp_client::handleRxError,
                                                     this,
