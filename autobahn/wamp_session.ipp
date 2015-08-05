@@ -61,7 +61,7 @@ boost::future<bool> wamp_session<IStream, OStream>::start()
     // Send the initial handshake packet informing the server which
     // serialization format we wish to use, and our maximum message size
     m_buffer_message_length[0] = 0x7F; // magic byte
-    m_buffer_message_length[1] = 0xF2; // we are ready to receive messages up to 2**24 octets and encoded using MsgPack
+    m_buffer_message_length[1] = static_cast<char>(0xF2); // we are ready to receive messages up to 2**24 octets and encoded using MsgPack
     m_buffer_message_length[2] = 0x00; // reserved
     m_buffer_message_length[3] = 0x00; // reserved
     boost::asio::write(m_out, boost::asio::buffer(m_buffer_message_length, sizeof(m_buffer_message_length)));
