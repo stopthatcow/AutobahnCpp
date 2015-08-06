@@ -71,7 +71,7 @@ public:
         m_pSession = std::make_shared<wamp_tcp_session_t>(*m_pIo, *m_pSocket, *m_pSocket, m_debug);
         m_pSession->m_onRxError.connect(boost::bind(&wamp_tcp_client::handleRxError,
                                                     this,
-                                                    boost::asio::placeholders::error()));
+                                                    boost::asio::placeholders::error));
     }
 
     bool isConnected(){

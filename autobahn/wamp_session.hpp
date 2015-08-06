@@ -44,7 +44,9 @@
 #include <vector>
 
 #if defined(_WIN32) || defined(WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #endif
 
 #ifdef ERROR
@@ -254,7 +256,7 @@ private:
     /// Output stream this session runs on.
     OStream& m_out;
 
-    char m_buffer_message_length[4];
+    unsigned char m_buffer_message_length[4];
     uint32_t m_message_length;
 
     /// MsgPack unserialization unpacker.
