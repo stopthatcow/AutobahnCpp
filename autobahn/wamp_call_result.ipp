@@ -29,7 +29,7 @@ inline wamp_call_result::wamp_call_result()
 {
 }
 
-inline wamp_call_result::wamp_call_result(std::unique_ptr<msgpack::zone>&& zone)
+inline wamp_call_result::wamp_call_result(msgpack::unique_ptr<msgpack::zone>&& zone)
     : m_arguments(EMPTY_ARGUMENTS)
     , m_kw_arguments(EMPTY_KW_ARGUMENTS)
     , m_zone(std::move(zone))

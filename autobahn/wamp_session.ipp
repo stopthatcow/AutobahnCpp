@@ -659,7 +659,7 @@ void wamp_session<IStream, OStream>::process_error(const wamp_message& message)
                 error += ": ";
                 error += itr->second;
             }
-        } catch (const std::exception& e) {
+        } catch (const std::exception&)  {
             if (m_debug) {
                 std::cerr << "failed to parse error message keyword arguments" << std::endl;
             }
