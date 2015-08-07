@@ -16,8 +16,8 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef AUTOBAHN_TCP_CLIENT_H
-#define AUTOBAHN_TCP_CLIENT_H
+#ifndef AUTOBAHN_TCP_CLIENT_HPP
+#define AUTOBAHN_TCP_CLIENT_HPP
 
 #include <autobahn/autobahn.hpp>
 #include <boost/asio.hpp>
@@ -28,109 +28,107 @@
 #include <tuple>
 namespace autobahn {
 /**
- * @brief a class that wraps initialization of a raw tcp socket and WAMP client session utilizing it
+ * \brief a class that wraps initialization of a raw tcp socket and WAMP client session utilizing it
  */
-class wamp_tcp_client {
-    typedef autobahn::wamp_session<boost::asio::ip::tcp::socket, boost::asio::ip::tcp::socket> wamp_tcp_session_t;
+class wamp_tcp_client
+{
 public:
-    wamp_tcp_client(std::shared_ptr<boost::asio::io_service> pIo,
-                    const boost::asio::ip::tcp::endpoint &Endpoint,
+    using wamp_tcp_session_t = autobahn::wamp_session<boost::asio::ip::tcp::socket, boost::asio::ip::tcp::socket>;
+    wamp_tcp_client(std::shared_ptr<boost::asio::io_service> Io,
+                    const boost::asio::ip::tcp::endpoint Endpoint,
                     const std::string &Realm,
-                    bool Debug = false) :
-        m_realm(Realm),
-        m_rawsocket_endpoint(Endpoint),
-        m_pIo(pIo),
-        m_debug(Debug),
-        m_isConnected(false){
-        init();
+                    bool Debug = false)
+        : m_rawsocket_endpoint(Endpoint)
+        , m_socket(*Io)
+        , m_session(*Io, m_socket, m_socket, Debug)
+        , m_realm(Realm)
+    {
+        m_socket.open(boost::asio::ip::tcp::v4());
+        m_socket.set_option(boost::asio::ip::tcp::no_delay(true));
+        m_session.m_onRxError.connect(boost::bind(&wamp_tcp_client::handleRxError,
+                                                  this,
+                                                  boost::asio::placeholders::error));
     }
 
-    wamp_tcp_client(std::shared_ptr<boost::asio::io_service> pIo,
-                    const std::string &IpAddress,
+    wamp_tcp_client(std::shared_ptr<boost::asio::io_service> Io,
+                    std::string IpAddress,
                     uint16_t Port,
                     const std::string &Realm,
-                    bool Debug = false) :
-        m_realm(Realm),
-        m_rawsocket_endpoint(boost::asio::ip::address::from_string(IpAddress), Port),
-        m_pIo(pIo),
-        m_debug(Debug) {
-        init();
-    }
-
+                    bool Debug = false)
+        : wamp_tcp_client(Io,
+                          boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string(IpAddress), Port),
+                          Realm,
+                          Debug)
+    {}
     /**
-     * @brief initialize members, creating shared pointers for the socket, and session
-     */
-    void init() {
-        m_pSession.reset();
-        m_pSocket.reset();
-        m_connected = boost::promise<bool>();
-        m_pSocket = std::make_shared<boost::asio::ip::tcp::socket>(*m_pIo);
-        m_pSocket->open(boost::asio::ip::tcp::v4());
-        boost::asio::ip::tcp::no_delay option(true);
-        m_pSocket->set_option(option);
-        m_pSession = std::make_shared<wamp_tcp_session_t>(*m_pIo, *m_pSocket, *m_pSocket, m_debug);
-        m_pSession->m_onRxError.connect(boost::bind(&wamp_tcp_client::handleRxError,
-                                                    this,
-                                                    boost::asio::placeholders::error));
-    }
-
-    bool isConnected(){
-        return m_isConnected;
-    }
-
-    /**
-     * @brief launches the session asynchronously, returns a future containing an error code (0 means success)
-     */
-    boost::future<bool> launch() {
-        m_pSocket->async_connect(m_rawsocket_endpoint, [&](boost::system::error_code ec) {
+    * \brief launches the session asynchronously, returns a future containing an error code (0 means success)
+    */
+    boost::future<uint64_t> launch()
+    {
+        m_socket.async_connect(m_rawsocket_endpoint, [&](const boost::system::error_code& ec) {
             if (!ec) {
-                m_startFuture = m_pSession->start().then([&](boost::future<bool> started) {
-                        m_joinFuture = m_pSession->join(m_realm).then([&](boost::future<uint64_t> connected) {
-                        m_isConnected=true;
-                        m_connected.set_value(true);
-                        m_onConnect();
+                m_start_future = m_session.start().then([&](boost::future<bool> started) {
+                    if(started.get()){
+                        m_join_future = m_session.join(m_realm).then([&](boost::future<uint64_t> session) {
+                            m_session_id_promise.set_value(session.get());
+                            m_connected();
+                        });
+                    }else{
+                        m_session_id_promise.set_exception(std::runtime_error("start failed"));
+                    }
+                });
+            } else {
+                m_session_id_promise.set_exception(std::runtime_error("connect failed: " + ec.message()));
+            }
+        });
+        return m_session_id_promise.get_future();
+    }
 
-            });
-            });
-        } else {
-            std::cerr << "connect failed: " << ec.message() << std::endl;
-            m_isConnected=true;
-            m_connected.set_value(false);
-        }
-    });
-    return m_connected.get_future();
-}
+    ~wamp_tcp_client()
+    {
+    }
 
-~wamp_tcp_client() {
-}
+    /**
+     * This operator is used to pass through calls to the WAMP session. i.e client->call(...)
+     */
+    wamp_tcp_session_t* operator->()
+    {
+        return &m_session;
+    }
 
-/**
- * This operator is used to pass through calls to the WAMP session. i.e *(pClient)->call(...)
- */
-std::shared_ptr<wamp_tcp_session_t> &operator->() {
-    return m_pSession;
-}
-//signals emitted
-boost::signals2::signal<void()> m_onDisconnect;
-boost::signals2::signal<void()> m_onConnect;
-private:
-void handleRxError(const boost::system::error_code &Code){
-    //if(m_debug){
-        std::cerr<< "Got rx error, closing socket: "<< Code.message() << std::endl;
-   // }
-    m_onDisconnect();
-}
+    const wamp_tcp_session_t* operator->() const
+    {
+        return &m_session;
+    }
 
-boost::future<void> m_startFuture; ///<holds the future of the start() operation
-boost::future<void> m_joinFuture; ///<holds the future of the join() operation
-boost::promise<bool> m_connected; ///<holds the future state of the success of launch
-std::shared_ptr<wamp_tcp_session_t> m_pSession; //<need to be sure this is destructed before m_pSocket
-std::shared_ptr<boost::asio::ip::tcp::socket> m_pSocket;
-std::string m_realm;
-boost::asio::ip::tcp::endpoint m_rawsocket_endpoint;
-std::shared_ptr<boost::asio::io_service> m_pIo; ///<hold a reference so that we can clean up when the last user goes out of scope
-bool m_debug;
-bool m_isConnected;
+    boost::signals2::signal<void()>& disconnected()
+    {
+        return m_disconnected;
+    }
+
+    boost::signals2::signal<void()>& connected()
+    {
+        return m_connected;
+    }
+    bool is_connected()
+    {
+        return m_session.is_connected();
+    }
+    private:
+    void handleRxError(const boost::system::error_code &Code)
+    {
+        m_disconnected();
+    }
+    //signals emitted
+    boost::signals2::signal<void()> m_disconnected;
+    boost::signals2::signal<void()> m_connected;
+    boost::future<void> m_start_future; ///<holds the future of the start() operation
+    boost::future<void> m_join_future; ///<holds the future of the join() operation
+    boost::promise<uint64_t> m_session_id_promise; ///<holds the future state of the success of launch
+    boost::asio::ip::tcp::endpoint m_rawsocket_endpoint;
+    boost::asio::ip::tcp::socket m_socket;
+    wamp_tcp_session_t m_session; //<need to be sure this is destructed before m_pSocket
+    std::string m_realm;
 };
 } //namespace autobahn
 #endif //AUTOBAHN_TCP_CLIENT_H

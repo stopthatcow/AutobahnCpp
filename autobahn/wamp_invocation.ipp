@@ -22,6 +22,10 @@
 #include <stdexcept>
 #include <tuple>
 
+namespace{
+    static const msgpack::object EMPTY_DETAILS(std::unordered_map<std::string, msgpack::object>(), nullptr);
+}
+
 namespace autobahn {
 
 inline wamp_invocation_impl::wamp_invocation_impl()
@@ -35,7 +39,7 @@ inline wamp_invocation_impl::wamp_invocation_impl()
 }
 
 template <typename T>
-T wamp_invocation_impl::details(const std::string& key) const
+T wamp_invocation_impl::detail(const std::string& key) const
 {
     if (m_details.type != msgpack::type::MAP) {
         throw msgpack::type_error();

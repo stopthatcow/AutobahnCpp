@@ -29,16 +29,11 @@
 
 namespace autobahn {
 
-static const msgpack::object EMPTY_DETAILS(std::unordered_map<std::string, msgpack::object>(), nullptr);
-
-
 class wamp_invocation_impl
 {
 public:
     wamp_invocation_impl();
     wamp_invocation_impl(wamp_invocation_impl&&) = delete; // copy wamp_invocation instead
-    template <typename T>
-    T details(const std::string& key) const;
 
     /*!
      * The detail passed by the router with the given @p key, converted to type T.
@@ -56,6 +51,8 @@ public:
      * @throw std::out_of_range
      * @throw std::bad_cast
      */
+    template <typename T>
+    T detail(const std::string& key) const;
 
     template <typename T>
     T detail(const char *key) const;

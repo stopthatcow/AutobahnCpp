@@ -727,7 +727,7 @@ void wamp_session<IStream, OStream>::process_invocation(
 
         if (message[3].type != msgpack::type::MAP) {
             throw protocol_error("INVOCATION.Details must be a map");
-        }else{
+        } else {
             invocation->set_details(message[3]);
         }
 

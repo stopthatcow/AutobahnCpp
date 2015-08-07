@@ -196,6 +196,15 @@ public:
             const provide_options& options = provide_options());
 
     boost::signals2::signal<void (const boost::system::error_code &)> m_onRxError;
+    /*!
+     * \brief is_connected
+     * \return true if there is a valid session
+     */
+    bool is_connected()
+    {
+        return m_session_id!=0U;
+    }
+
 private:
     /// Handle error codes from the istream (filters out operation_aborted error), passes all others to m_onRxError signal
     void handleRxError(const boost::system::error_code &error);
@@ -244,7 +253,6 @@ private:
     void got_message_body(const boost::system::error_code& error);
 
     void got_message(const msgpack::object& object, msgpack::unique_ptr<msgpack::zone>&& zone);
-
 
     bool m_debug;
 
