@@ -40,12 +40,13 @@ public:
                     bool Debug = false)
         : m_rawsocket_endpoint(Endpoint)
         , m_socket(*Io)
-        , m_session(*Io, m_socket, m_socket, Debug)
         , m_realm(Realm)
     {
+
         m_socket.open(boost::asio::ip::tcp::v4());
         m_socket.set_option(boost::asio::ip::tcp::no_delay(true));
-        m_session.m_onRxError.connect(boost::bind(&wamp_tcp_client::handleRxError,
+        m_session = std::make_shared<wamp_tcp_session_t>(*Io, m_socket, m_socket, Debug);
+        m_session->m_onRxError.connect(boost::bind(&wamp_tcp_client::handleRxError,
                                                   this,
                                                   boost::asio::placeholders::error));
     }
@@ -67,9 +68,9 @@ public:
     {
         m_socket.async_connect(m_rawsocket_endpoint, [&](const boost::system::error_code& ec) {
             if (!ec) {
-                m_start_future = m_session.start().then([&](boost::future<bool> started) {
+                m_start_future = m_session->start().then([&](boost::future<bool> started) {
                     if(started.get()){
-                        m_join_future = m_session.join(m_realm).then([&](boost::future<uint64_t> session) {
+                        m_join_future = m_session->join(m_realm).then([&](boost::future<uint64_t> session) {
                             m_session_id_promise.set_value(session.get());
                             m_connected();
                         });
@@ -93,12 +94,12 @@ public:
      */
     wamp_tcp_session_t* operator->()
     {
-        return &m_session;
+        return m_session.get();
     }
 
     const wamp_tcp_session_t* operator->() const
     {
-        return &m_session;
+        return m_session.get();
     }
 
     boost::signals2::signal<void()>& disconnected()
@@ -112,7 +113,7 @@ public:
     }
     bool is_connected()
     {
-        return m_session.is_connected();
+        return m_session->is_connected();
     }
     private:
     void handleRxError(const boost::system::error_code &Code)
@@ -127,7 +128,7 @@ public:
     boost::promise<uint64_t> m_session_id_promise; ///<holds the future state of the success of launch
     boost::asio::ip::tcp::endpoint m_rawsocket_endpoint;
     boost::asio::ip::tcp::socket m_socket;
-    wamp_tcp_session_t m_session; //<need to be sure this is destructed before m_pSocket
+    std::shared_ptr<wamp_tcp_session_t> m_session; //<need to be sure this is destructed before m_pSocket
     std::string m_realm;
 };
 } //namespace autobahn
