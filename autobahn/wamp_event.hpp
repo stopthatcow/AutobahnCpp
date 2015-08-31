@@ -26,10 +26,11 @@
 
 namespace autobahn {
 
-class wamp_event
+class wamp_event_impl
 {
 public:
-    wamp_event();
+    wamp_event_impl();
+    wamp_event_impl(wamp_event_impl&&) = delete; // copy wamp_event instead
 
     /*!
      * The number of positional arguments published by the event.
@@ -174,11 +175,14 @@ public:
     void set_arguments(const msgpack::object& arguments);
     void set_kw_arguments(const msgpack::object& kw_arguments);
 
+    void set_zone(msgpack::zone&&);
 private:
     msgpack::object m_arguments;
     msgpack::object m_kw_arguments;
+    msgpack::zone m_zone;
 };
 
+using wamp_event = std::shared_ptr<wamp_event_impl>;
 } // namespace autobahn
 
 #include "wamp_event.ipp"

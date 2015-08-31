@@ -893,7 +893,8 @@ void wamp_session<IStream, OStream>::process_unsubscribed(const wamp_message& me
 }
 
 template<typename IStream, typename OStream>
-void wamp_session<IStream, OStream>::process_event(const wamp_message& message)
+void wamp_session<IStream, OStream>::process_event(const wamp_message& message,
+                                                   msgpack::unique_ptr<msgpack::zone>&& zone)
 {
     // [EVENT, SUBSCRIBED.Subscription|id, PUBLISHED.Publication|id, Details|dict]
     // [EVENT, SUBSCRIBED.Subscription|id, PUBLISHED.Publication|id, Details|dict, PUBLISH.Arguments|list]
@@ -925,20 +926,23 @@ void wamp_session<IStream, OStream>::process_event(const wamp_message& message)
             throw protocol_error("EVENT - Details must be a dictionary");
         }
 
-        wamp_event event;
+        wamp_event event = std::make_shared<wamp_event_impl>();
+
         if (message.size() > 4) {
             if (message[4].type != msgpack::type::ARRAY) {
                 throw protocol_error("EVENT - EVENT.Arguments must be a list");
             }
-            event.set_arguments(message[4]);
+            event->set_arguments(message[4]);
 
             if (message.size() > 5) {
                 if (message[5].type != msgpack::type::MAP) {
                     throw protocol_error("EVENT - EVENT.ArgumentsKw must be a dictionary");
                 }
-                event.set_kw_arguments(message[5]);
+                event->set_kw_arguments(message[5]);
             }
         }
+        event->set_zone(std::move(*zone));
+        zone.reset();
 
         try {
             // now trigger the user supplied event handler ..
@@ -1115,7 +1119,7 @@ void wamp_session<IStream, OStream>::got_message(
             process_unsubscribed(message);
             break;
         case message_type::EVENT:
-            process_event(message);
+            process_event(message, std::move(zone));
             break;
         case message_type::CALL:
             throw protocol_error("received CALL message unexpected for WAMP client roles");

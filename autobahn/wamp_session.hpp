@@ -227,7 +227,9 @@ private:
     void process_unsubscribed(const wamp_message& message);
 
     /// Process a WAMP EVENT message.
-    void process_event(const wamp_message& message);
+    void process_event(
+            const wamp_message& message,
+            msgpack::unique_ptr<msgpack::zone>&& zone);
 
     /// Process a WAMP REGISTERED message.
     void process_registered(const wamp_message& message);
