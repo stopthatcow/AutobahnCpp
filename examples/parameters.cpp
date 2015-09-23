@@ -10,14 +10,12 @@ const std::string LOCALHOST_IP_ADDRESS_STRING("127.0.0.1");
 const boost::asio::ip::address LOCALHOST_IP_ADDRESS(
         boost::asio::ip::address::from_string(LOCALHOST_IP_ADDRESS_STRING));
 const std::string DEFAULT_WAMP_REALM("default");
-const std::string DEFAULT_WAMP_DOMAIN("test1");
 const uint16_t DEFAULT_WAMP_RAWSOCKET_PORT(8000);
 }
 
 parameters::parameters()
     : m_debug(false)
     , m_realm(DEFAULT_WAMP_REALM)
-    , m_domain(DEFAULT_WAMP_DOMAIN)
     , m_rawsocket_endpoint(LOCALHOST_IP_ADDRESS, DEFAULT_WAMP_RAWSOCKET_PORT)
 {
 }
@@ -30,11 +28,6 @@ bool parameters::debug() const
 const std::string& parameters::realm() const
 {
     return m_realm;
-}
-
-const std::string& parameters::domain() const
-{
-    return m_domain;
 }
 
 const boost::asio::ip::tcp::endpoint& parameters::rawsocket_endpoint() const
@@ -52,11 +45,6 @@ void parameters::set_realm(const std::string& realm)
     m_realm = realm;
 }
 
-void parameters::set_domain(const std::string& domain)
-{
-    m_domain = domain;
-}
-
 void parameters::set_rawsocket_endpoint(const std::string& ip_address, uint16_t port)
 {
     m_rawsocket_endpoint = boost::asio::ip::tcp::endpoint(
@@ -71,16 +59,14 @@ std::unique_ptr<parameters> get_parameters(int argc, char** argv)
     po::options_description description("options");
     description.add_options()
             ("help", "Display this help message")
-            ("debug", po::bool_switch()->default_value(false),
-                    "Enable debug logging.")
-            ("realm", po::value<std::string>()->default_value(DEFAULT_WAMP_REALM),
+            ("realm,r", po::value<std::string>()->default_value(DEFAULT_WAMP_REALM),
                     "The realm to join on the wamp router.")
-            ("domain", po::value<std::string>()->default_value(DEFAULT_WAMP_DOMAIN),
-                    "The domain domain to use for the backplane.")
-            ("rawsocket-ip", po::value<std::string>()->default_value(LOCALHOST_IP_ADDRESS_STRING),
+            ("rawsocket-ip,h", po::value<std::string>()->default_value(LOCALHOST_IP_ADDRESS_STRING),
                     "The ip address of the host running the wamp router.")
-            ("rawsocket-port", po::value<uint16_t>()->default_value(DEFAULT_WAMP_RAWSOCKET_PORT),
-                    "The port that the wamp router is listening for connections on.");
+            ("rawsocket-port,p", po::value<uint16_t>()->default_value(DEFAULT_WAMP_RAWSOCKET_PORT),
+                    "The port that the wamp router is listening for connections on.")
+            ("debug,d", po::bool_switch()->default_value(false),
+                    "Enable debug logging.");
 
     po::variables_map variables;
     try {
@@ -101,7 +87,6 @@ std::unique_ptr<parameters> get_parameters(int argc, char** argv)
 
     params->set_debug(variables["debug"].as<bool>());
     params->set_realm(variables["realm"].as<std::string>());
-    params->set_domain(variables["domain"].as<std::string>());
     params->set_rawsocket_endpoint(
             variables["rawsocket-ip"].as<std::string>(),
             variables["rawsocket-port"].as<uint16_t>());

@@ -15,7 +15,8 @@
 //  limitations under the License.
 //
 ///////////////////////////////////////////////////////////////////////////////
-#include "parameters.hpp"
+
+#include "../parameters.hpp"
 
 #include <autobahn/autobahn.hpp>
 #include <boost/asio.hpp>
@@ -57,11 +58,16 @@ int main(int argc, char** argv)
                     std::cerr << "connected to server" << std::endl;
 
                     start_future = session->start().then([&](boost::future<bool> started) {
-                        std::cerr << "session started" << std::endl;
-                        join_future = session->join(parameters->realm()).then([&](boost::future<uint64_t> s) {
-                            std::cerr << "joined realm: " << s.get() << std::endl;
-                            session->subscribe("com.examples.subscriptions.topic1", &topic1);
-                        });
+                        if (started.get()) {
+                            std::cerr << "session started" << std::endl;
+                            join_future = session->join(parameters->realm()).then([&](boost::future<uint64_t> s) {
+                                std::cerr << "joined realm: " << s.get() << std::endl;
+                                session->subscribe("com.examples.subscriptions.topic1", &topic1);
+                            });
+                        } else {
+                            std::cerr << "failed to start session" << std::endl;
+                            io.stop();
+                        }
                     });
                 } else {
                     std::cerr << "connect failed: " << ec.message() << std::endl;

@@ -15,52 +15,63 @@
 //  limitations under the License.
 //
 ///////////////////////////////////////////////////////////////////////////////
-#include "parameters.hpp"
+
+#include "../parameters.hpp"
 
 #include <autobahn/autobahn.hpp>
 #include <boost/asio.hpp>
 #include <boost/version.hpp>
+#include <chrono>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <tuple>
 
-
 int main(int argc, char** argv)
 {
-    std::cerr << "Boost: " << BOOST_VERSION << std::endl;
-
     try {
+        boost::asio::io_service io_service;
         auto parameters = get_parameters(argc, argv);
+        auto endpoint = parameters->rawsocket_endpoint();
+        auto realm = parameters->realm();
+        auto debug = parameters->debug();
 
-        auto io = std::make_shared<boost::asio::io_service> ();
-        auto client = std::make_shared<autobahn::wamp_tcp_client>(io,
-                                                                 parameters->rawsocket_endpoint(),
-                                                                 "default",
-                                                                 parameters->debug());
+        boost::future<void> started;
+        boost::future<void> called;
+        boost::future<void> stopped;
 
-        boost::future<void> callFuture;
-        boost::future<void> startFuture;
-        startFuture = client->launch().then([&](boost::future<bool> connected) {
-            std::cerr << "connectOk:" << connected.get() << std::endl;
+        std::unique_ptr<autobahn::wamp_tcp_component> component(
+                new autobahn::wamp_tcp_component(
+                        io_service, endpoint, realm, debug));
+
+        started = component->start().then([&](boost::future<void>) {
+            autobahn::wamp_call_options call_options;
+            call_options.set_timeout(std::chrono::seconds(10));
+
+            auto session = component->session();
             std::tuple<uint64_t, uint64_t> arguments(23, 777);
-            auto start = boost::posix_time::microsec_clock::local_time();
-            callFuture = (*client)->call("uav1/com.examples.calculator.add", arguments).then(
-                    [&, start](boost::future<autobahn::wamp_call_result> result) {
+            called = session->call("com.examples.calculator.add", arguments, call_options).then(
+                [&](boost::future<autobahn::wamp_call_result> result) {
+                    try {
                         uint64_t sum = result.get().argument<uint64_t>(0);
                         std::cerr << "call result: " << sum << std::endl;
-                        auto finish = boost::posix_time::microsec_clock::local_time();
-                        std::cerr<< "Call time (usec):" << (finish-start).total_microseconds() <<std::endl;
-                        client.reset();
+                    } catch (const std::exception& e) {
+                        std::cerr << "call failed: " << e.what() << std::endl;
+                    }
+
+                    stopped = component->stop().then([&](boost::future<void>) {
+                        io_service.stop();
                     });
+            });
         });
-        std::cerr << "starting io service" << std::endl;
-        io->run();
-        std::cerr << "stopped io service" << std::endl;
+
+        io_service.run();
+        stopped.wait();
     }
     catch (const std::exception& e) {
         std::cerr << e.what() << std::endl;
-        return 1;
+        return -1;
     }
+
     return 0;
 }

@@ -19,6 +19,7 @@
 #ifndef AUTOBAHN_SESSION_HPP
 #define AUTOBAHN_SESSION_HPP
 
+#include "wamp_call_options.hpp"
 #include "wamp_call_result.hpp"
 #include "wamp_event_handler.hpp"
 #include "wamp_message.hpp"
@@ -75,6 +76,8 @@ public:
      * \param out THe output stream to run this session on.
      */
     wamp_session(boost::asio::io_service& io, IStream& in, OStream& out, bool debug = false);
+
+    ~wamp_session();
 
     /*!
      * Start listening on the IStream provided to the constructor
@@ -155,20 +158,25 @@ public:
      * Calls a remote procedure with no arguments.
      *
      * \param procedure The URI of the remote procedure to call.
+     * \param options The options to pass in the call to the router.
      * \return A future that resolves to the result of the remote procedure call.
      */
-    boost::future<wamp_call_result> call(const std::string& procedure);
+    boost::future<wamp_call_result> call(
+            const std::string& procedure,
+            const wamp_call_options& options = wamp_call_options());
 
     /*!
      * Calls a remote procedure with positional arguments.
      *
      * \param procedure The URI of the remote procedure to call.
      * \param arguments The positional arguments for the call.
+     * \param options The options to pass in the call to the router.
      * \return A future that resolves to the result of the remote procedure call.
      */
     template <typename List>
     boost::future<wamp_call_result> call(
-            const std::string& procedure, const List& arguments);
+            const std::string& procedure, const List& arguments,
+            const wamp_call_options& options = wamp_call_options());
 
     /*!
      * Calls a remote procedure with positional and keyword arguments.
@@ -176,11 +184,13 @@ public:
      * \param procedure The URI of the remote procedure to call.
      * \param arguments The positional arguments for the call.
      * \param kw_arguments The keyword arguments for the call.
+     * \param options The options to pass in the call to the router.
      * \return A future that resolves to the result of the remote procedure call.
      */
     template<typename List, typename Map>
     boost::future<wamp_call_result> call(
-            const std::string& procedure, const List& arguments, const Map& kw_arguments);
+            const std::string& procedure, const List& arguments, const Map& kw_arguments,
+            const wamp_call_options& options = wamp_call_options());
 
     /*!
      * Register an procedure as a procedure that can be called remotely.
@@ -256,6 +266,7 @@ private:
 
     void got_message(const msgpack::object& object, msgpack::unique_ptr<msgpack::zone>&& zone);
 
+
     bool m_debug;
 
     boost::asio::io_service& m_io;
@@ -266,7 +277,7 @@ private:
     /// Output stream this session runs on.
     OStream& m_out;
 
-    unsigned char m_buffer_message_length[4];
+    char m_message_length_buffer[4];
     uint32_t m_message_length;
 
     /// MsgPack unserialization unpacker.
@@ -274,6 +285,9 @@ private:
 
     /// Last request ID of outgoing WAMP requests.
     std::atomic<uint64_t> m_request_id;
+
+    /// Buffer used to hold the sent/recevied rawsocket handshake
+    char m_handshake_buffer[4];
 
     /// Synchronization for dealing with the rawsocket handshake
     boost::promise<bool> m_handshake;

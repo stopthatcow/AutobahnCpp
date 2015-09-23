@@ -3,7 +3,10 @@ cmake_minimum_required(VERSION 2.8)
 
 project(autobahn-cpp)
 
-set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Werror ${CMAKE_CXX_FLAGS}")
+if(NOT MSVC)
+    set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Werror -Wno-unused-local-typedefs -Wno-unknown-warning-option ${CMAKE_CXX_FLAGS}")
+endif()
+
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     set(CMAKE_CXX_FLAGS "-stdlib=libc++ ${CMAKE_CXX_FLAGS}")
     if ("${CMAKE_GENERATOR}" STREQUAL "Ninja")
@@ -28,8 +31,12 @@ set(PUBLIC_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_arguments.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_call.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_call.ipp
+    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_call_options.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_call_options.ipp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_call_result.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_call_result.ipp
+    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_component.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_component.ipp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_event.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_event.ipp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_event_handler.hpp
@@ -37,6 +44,8 @@ set(PUBLIC_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_invocation.ipp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_message.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_message_type.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_network_component.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_network_component.ipp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_procedure.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_publication.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_publication.ipp
@@ -50,9 +59,11 @@ set(PUBLIC_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_subscribe_request.ipp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_subscription.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_subscription.ipp
+    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_tcp_component.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_tcp_component.ipp
+    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_uds_component.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_unsubscribe_request.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_unsubscribe_request.ipp
-    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_tcp_client.hpp)
+    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_unsubscribe_request.ipp)
 
 foreach(h ${PUBLIC_HEADERS})
     string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/" "include/" include "${h}")
