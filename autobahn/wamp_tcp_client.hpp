@@ -39,6 +39,7 @@ public:
                     const std::string &Realm,
                     bool Debug = false)
         : m_rawsocket_endpoint(Endpoint)
+        , m_pIoSvc(Io)
         , m_socket(*Io)
         , m_realm(Realm)
     {
@@ -127,6 +128,7 @@ public:
     boost::future<void> m_join_future; ///<holds the future of the join() operation
     boost::promise<uint64_t> m_session_id_promise; ///<holds the future state of the success of launch
     boost::asio::ip::tcp::endpoint m_rawsocket_endpoint;
+    std::shared_ptr<boost::asio::io_service> m_pIoSvc; ///<needed to hold a reference count for our socket
     boost::asio::ip::tcp::socket m_socket;
     std::shared_ptr<wamp_tcp_session_t> m_session; //<need to be sure this is destructed before m_pSocket
     std::string m_realm;
