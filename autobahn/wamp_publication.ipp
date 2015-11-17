@@ -19,7 +19,7 @@
 namespace autobahn {
 
 inline wamp_publication::wamp_publication()
-    : m_id(0)
+    : m_id(0U)
 {
 }
 

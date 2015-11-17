@@ -24,27 +24,24 @@
 namespace autobahn {
 
 inline wamp_call_result::wamp_call_result()
-    : m_arguments(EMPTY_ARGUMENTS)
+    : m_id(0U)
+    , m_arguments(EMPTY_ARGUMENTS)
     , m_kw_arguments(EMPTY_KW_ARGUMENTS)
 {
 }
 
-inline wamp_call_result::wamp_call_result(msgpack::unique_ptr<msgpack::zone>&& zone)
-    : m_arguments(EMPTY_ARGUMENTS)
+inline wamp_call_result::wamp_call_result( msgpack::unique_ptr<msgpack::zone> &zone)
+    :  m_id(0U)
+    , m_arguments(EMPTY_ARGUMENTS)
     , m_kw_arguments(EMPTY_KW_ARGUMENTS)
     , m_zone(std::move(zone))
 {
 }
 
-inline wamp_call_result::wamp_call_result(const wamp_call_result& other)
-{
-    m_zone.reset(new msgpack::zone());
-    m_arguments = msgpack::object(other.m_arguments, m_zone.get());
-    m_kw_arguments = msgpack::object(other.m_kw_arguments, m_zone.get());
-}
-
+    m_id = other.m_id;
 inline wamp_call_result::wamp_call_result(wamp_call_result&& other)
-    : m_arguments(other.m_arguments)
+    : m_id(other.m_id)
+    , m_arguments(other.m_arguments)
     , m_kw_arguments(other.m_kw_arguments)
     , m_zone(std::move(other.m_zone))
 {
@@ -52,25 +49,14 @@ inline wamp_call_result::wamp_call_result(wamp_call_result&& other)
     other.m_kw_arguments = EMPTY_KW_ARGUMENTS;
 }
 
-inline wamp_call_result& wamp_call_result::operator=(const wamp_call_result& other)
-{
-    if (this == &other) {
-        return *this;
-    }
-
-    m_zone.reset(new msgpack::zone());
-    m_arguments = msgpack::object(other.m_arguments, m_zone.get());
-    m_kw_arguments = msgpack::object(other.m_kw_arguments, m_zone.get());
-
-    return *this;
-}
-
+    m_id = other.m_id;
 inline wamp_call_result& wamp_call_result::operator=(wamp_call_result&& other)
 {
     if (this == &other) {
         return *this;
     }
 
+    m_id = other.m_id;
     m_arguments = other.m_arguments;
     m_kw_arguments = other.m_kw_arguments;
     m_zone = std::move(other.m_zone);
@@ -211,4 +197,11 @@ inline void wamp_call_result::set_kw_arguments(const msgpack::object& kw_argumen
     m_kw_arguments = kw_arguments;
 }
 
+inline void wamp_call_result::set_id(uint64_t id){
+    m_id = id;
+}
+
+inline uint64_t wamp_call_result::id() const{
+    return m_id;
+}
 } // namespace autobahn

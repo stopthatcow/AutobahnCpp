@@ -24,6 +24,7 @@ namespace autobahn {
 inline wamp_event_impl::wamp_event_impl()
     : m_arguments(EMPTY_ARGUMENTS)
     , m_kw_arguments(EMPTY_KW_ARGUMENTS)
+    , m_details(EMPTY_DETAILS)
     , m_zone()
 {
 }
@@ -148,6 +149,88 @@ inline void wamp_event_impl::get_kw_arguments(Map& kw_args) const
     m_kw_arguments.convert(kw_args);
 }
 
+template <typename T>
+inline T wamp_event_impl::detail(const std::string& key) const
+{
+    if (m_details.type != msgpack::type::MAP) {
+        throw msgpack::type_error();
+    }
+    for (std::size_t i = 0; i < m_details.via.map.size; ++i) {
+        const msgpack::object_kv& kv = m_details.via.map.ptr[i];
+        if (kv.key.type == msgpack::type::STR && key.size() == kv.key.via.str.size
+                && key.compare(0, key.size(), kv.key.via.str.ptr, kv.key.via.str.size) == 0)
+        {
+            return kv.val.as<T>();
+        }
+    }
+    throw std::out_of_range(key + " keyword argument doesn't exist");
+}
+
+template <typename T>
+inline T wamp_event_impl::detail(const char* key) const
+{
+    if (m_details.type != msgpack::type::MAP) {
+        throw msgpack::type_error();
+    }
+    std::size_t key_size = strlen(key);
+    for (std::size_t i = 0; i < m_details.via.map.size; ++i) {
+        const msgpack::object_kv& kv = m_details.via.map.ptr[i];
+        if (kv.key.type == msgpack::type::STR && key_size == kv.key.via.str.size
+                && memcmp(key, kv.key.via.str.ptr, key_size) == 0)
+        {
+            return kv.val.as<T>();
+        }
+    }
+    throw std::out_of_range(std::string(key) + " keyword argument doesn't exist");
+}
+
+template <typename T>
+inline T wamp_event_impl::detail_or(const std::string& key, const T& fallback) const
+{
+    if (m_details.type != msgpack::type::MAP) {
+        throw msgpack::type_error();
+    }
+    for (std::size_t i = 0; i < m_details.via.map.size; ++i) {
+        const msgpack::object_kv& kv = m_details.via.map.ptr[i];
+        if (kv.key.type == msgpack::type::STR && key.size() == kv.key.via.str.size
+                && key.compare(0, key.size(), kv.key.via.str.ptr, kv.key.via.str.size) == 0)
+        {
+            return kv.val.as<T>();
+        }
+    }
+    return fallback;
+}
+
+template <typename T>
+inline T wamp_event_impl::detail_or(const char* key, const T& fallback) const
+{
+    if (m_details.type != msgpack::type::MAP) {
+        throw msgpack::type_error();
+    }
+    std::size_t key_size = strlen(key);
+    for (std::size_t i = 0; i < m_details.via.map.size; ++i) {
+        const msgpack::object_kv& kv = m_details.via.map.ptr[i];
+        if (kv.key.type == msgpack::type::STR && key_size == kv.key.via.str.size
+                && memcmp(key, kv.key.via.str.ptr, key_size) == 0)
+        {
+            return kv.val.as<T>();
+        }
+    }
+    throw fallback;
+}
+
+template <typename Map>
+inline Map wamp_event_impl::details() const
+{
+    return m_details.as<Map>();
+}
+
+template <typename Map>
+inline void wamp_event_impl::get_details(Map& kw_args) const
+{
+    m_details.convert(kw_args);
+}
+
 inline void wamp_event_impl::set_arguments(const msgpack::object& arguments)
 {
     m_arguments = arguments;
@@ -158,7 +241,12 @@ inline void wamp_event_impl::set_kw_arguments(const msgpack::object& kw_argument
     m_kw_arguments = kw_arguments;
 }
 
-inline void wamp_event_impl::set_zone(msgpack::zone&& zone)
+inline void wamp_event_impl::set_details(const msgpack::object& details)
+{
+    m_details = details;
+}
+
+inline void wamp_event_impl::set_zone( msgpack::unique_ptr<msgpack::zone>& zone)
 {
     m_zone = std::move(zone);
 }

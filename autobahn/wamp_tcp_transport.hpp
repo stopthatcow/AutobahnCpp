@@ -16,48 +16,39 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef AUTOBAHN_WAMP_REGISTER_REQUEST_HPP
-#define AUTOBAHN_WAMP_REGISTER_REQUEST_HPP
-
-#include "wamp_procedure.hpp"
-#include "wamp_registration.hpp"
+#ifndef AUTOBAHN_WAMP_TCP_TRANSPORT_HPP
+#define AUTOBAHN_WAMP_TCP_TRANSPORT_HPP
 
 // http://stackoverflow.com/questions/22597948/using-boostfuture-with-then-continuations/
-#ifndef BOOST_THREAD_PROVIDES_FUTURE
 #define BOOST_THREAD_PROVIDES_FUTURE
-#endif
-
-#ifndef BOOST_THREAD_PROVIDES_FUTURE_CONTINUATION
 #define BOOST_THREAD_PROVIDES_FUTURE_CONTINUATION
-#endif
-
-#ifndef BOOST_THREAD_PROVIDES_FUTURE_WHEN_ALL_WHEN_ANY
 #define BOOST_THREAD_PROVIDES_FUTURE_WHEN_ALL_WHEN_ANY
-#endif
-#include <boost/thread/future.hpp>
+
+#include "wamp_rawsocket_transport.hpp"
+
+#include <boost/asio/io_service.hpp>
+#include <boost/asio/ip/tcp.hpp>
 
 namespace autobahn {
 
-/// An outstanding wamp call.
-class wamp_register_request
+/*!
+ * A transport that provides rawsocket support over TCP.
+ */
+class wamp_tcp_transport :
+        public wamp_rawsocket_transport<boost::asio::ip::tcp::socket>
 {
 public:
-    wamp_register_request();
-    wamp_register_request(const wamp_procedure& procedure);
-    wamp_register_request(wamp_register_request&& other);
+    wamp_tcp_transport(
+            boost::asio::io_service& io_service,
+            const boost::asio::ip::tcp::endpoint& remote_endpoint,
+            bool debug_enabled=false);
+    virtual ~wamp_tcp_transport() override;
 
-    const wamp_procedure& procedure() const;
-    boost::promise<wamp_registration>& response();
-    void set_procedure(wamp_procedure procedure) const;
-    void set_response(const wamp_registration& registration);
-
-private:
-    wamp_procedure m_procedure;
-    boost::promise<wamp_registration> m_response;
+    virtual boost::future<void> connect() override;
 };
 
 } // namespace autobahn
 
-#include "wamp_register_request.ipp"
+#include "wamp_tcp_transport.ipp"
 
-#endif // AUTOBAHN_WAMP_REGISTER_REQUEST_HPP
+#endif // AUTOBAHN_WAMP_TCP_TRANSPORT_HPP

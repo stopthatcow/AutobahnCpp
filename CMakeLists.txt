@@ -3,18 +3,25 @@ cmake_minimum_required(VERSION 2.8)
 
 project(autobahn-cpp)
 
-if(NOT MSVC)
-    set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Werror -Wno-unused-local-typedefs -Wno-unknown-warning-option ${CMAKE_CXX_FLAGS}")
-endif()
-
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-    set(CMAKE_CXX_FLAGS "-stdlib=libc++ ${CMAKE_CXX_FLAGS}")
+    set(CMAKE_CXX_FLAGS "-stdlib=libc++ -Wno-unused-local-typedefs -Wno-unknown-warning-option ${CMAKE_CXX_FLAGS}")
     if ("${CMAKE_GENERATOR}" STREQUAL "Ninja")
         set(CMAKE_CXX_FLAGS "-fcolor-diagnostics ${CMAKE_CXX_FLAGS}")
     endif()
 endif()
+
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    if(NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS "4.9.0") # i.e. if >= 4.9.0
+        if (CMAKE_GENERATOR STREQUAL "Ninja")
+            set(CMAKE_CXX_FLAGS "-fdiagnostics-color=always ${CMAKE_CXX_FLAGS}")
+        else()
+            set(CMAKE_CXX_FLAGS "-fdiagnostics-color=auto ${CMAKE_CXX_FLAGS}")
+        endif()
+    endif()
+endif()
+
+if(NOT MSVC)
+    set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Werror -Wno-unused-variable ${CMAKE_CXX_FLAGS}")
 endif()
 
 set(CMAKE_MODULE_PATH
@@ -43,12 +50,15 @@ set(PUBLIC_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_invocation.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_invocation.ipp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_message.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_message.ipp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_message_type.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_network_component.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_network_component.ipp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_procedure.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_publication.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_publication.ipp
+    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_rawsocket_transport.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_rawsocket_transport.ipp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_register_request.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_register_request.ipp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_registration.hpp
@@ -59,9 +69,11 @@ set(PUBLIC_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_subscribe_request.ipp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_subscription.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_subscription.ipp
-    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_tcp_component.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_tcp_component.ipp
-    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_uds_component.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_tcp_transport.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_tcp_transport.ipp
+    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_transport.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_transport_handler.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_uds_transport.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_unsubscribe_request.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/autobahn/wamp_unsubscribe_request.ipp)
 
