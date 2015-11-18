@@ -58,7 +58,6 @@ inline wamp_session::wamp_session(
     , m_goodbye_sent(false)
     , m_running(false)
 {
-
 }
 
 inline wamp_session::~wamp_session()
@@ -339,12 +338,13 @@ inline boost::future<wamp_subscription> wamp_session::subscribe(
 
 inline boost::future<void> wamp_session::unsubscribe(const wamp_subscription& subscription)
 {
+    auto subscription_id = subscription.id();
     uint64_t request_id = ++m_request_id;
 
     auto message = std::make_shared<wamp_message>(3);
     message->set_field(0, static_cast<int>(message_type::UNSUBSCRIBE));
     message->set_field(1, request_id);
-    message->set_field(2, subscription.id());
+    message->set_field(2, subscription_id);
 
     auto weak_self = std::weak_ptr<wamp_session>(this->shared_from_this());
     auto unsubscribe_request = std::make_shared<wamp_unsubscribe_request>();
@@ -356,6 +356,7 @@ inline boost::future<void> wamp_session::unsubscribe(const wamp_subscription& su
         }
 
         try {
+            m_subscription_handlers.erase(subscription_id);
             send(std::move(*message));
             m_unsubscribe_requests.emplace(request_id, unsubscribe_request);
         } catch (const std::exception& e) {
@@ -504,6 +505,7 @@ inline boost::future<wamp_registration> wamp_session::provide(
 }
 
 inline boost::future<void> wamp_session::unprovide(const wamp_registration& registration){
+        auto registration_id = registration.id();
     auto buffer = std::make_shared<msgpack::sbuffer>();
     msgpack::packer<msgpack::sbuffer> packer(*buffer);
     uint64_t request_id = ++m_request_id;
@@ -512,7 +514,7 @@ inline boost::future<void> wamp_session::unprovide(const wamp_registration& regi
     auto message = std::make_shared<wamp_message>(3);
     message->set_field(0, static_cast<int>(message_type::UNREGISTER));
     message->set_field(1, request_id);
-    message->set_field(2, registration.id());
+    message->set_field(2, registration_id);
 
     auto weak_self = std::weak_ptr<wamp_session>(this->shared_from_this());
     auto unregister_request = std::make_shared<wamp_unregister_request>();
@@ -524,6 +526,7 @@ inline boost::future<void> wamp_session::unprovide(const wamp_registration& regi
         }
 
         try {
+          m_procedures.erase(registration_id);
           send(std::move(*message));
           m_unregister_requests.emplace(request_id, unregister_request);
         } catch (const std::exception& e) {
@@ -563,15 +566,6 @@ inline void wamp_session::on_detach(bool was_clean, const std::string& reason)
     if (!m_transport) {
         throw protocol_error("Transport already detached from session");
     }
-
-    // FIXME: Figure out what to do if we are detaching a transport
-    //        from a session that is still running. Ideally we would
-    //        not detach the transport until m_session_stop is satisfied.
-    //        Perhaps we could use the same promise/future discussed above.
-    //        One side effect here will be if the transport is re-used for
-    //        another session as it may still receive messages for the old
-    //        session.
-    assert(!m_running);
 
     m_transport.reset();
 }
