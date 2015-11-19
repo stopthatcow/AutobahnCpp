@@ -270,6 +270,8 @@ void wamp_rawsocket_transport<Socket>::receive_message_header(
 {
     if (error_code) {
         if (error_code != boost::asio::error::operation_aborted) {
+            m_handler->on_detach(false, "disconnect");
+            m_handler.reset();
             throw boost::system::system_error(error_code);
         }
         return;
@@ -299,6 +301,8 @@ void wamp_rawsocket_transport<Socket>::receive_message_body(
 {
     if (error_code) {
         if (m_debug_enabled && error_code != boost::asio::error::operation_aborted) {
+            m_handler->on_detach(false, "disconnect");
+            m_handler.reset();
             throw boost::system::system_error(error_code);
         }
         return;
